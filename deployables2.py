@@ -22,6 +22,7 @@ class Deployables2:
                 ("DEPLOY_ECR_ACCOUNT", None),
                 ("DEPLOY_ECR_HOST", None),
                 ("DEPLOY_ECS_CLUSTER_NAME", "stargate"),
+                ("DEPLOY_ENV_TO_TAG", None),
                 ("DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT", None),
                 ("DEPLOY_SHA1", None),
                 ("FLM_ENV", None),
@@ -124,12 +125,13 @@ class Deployables2:
 
     def _check_environment(self):
         return self._required_env(
-            "aws_access_key_id",
-            "aws_secret_access_key",
-            "deploy_app_name",
-            "deploy_aws_account",
-            "deploy_ecr_account",
-            "deploy_ecr_host",
+            [
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "deploy_aws_account",
+                "deploy_ecr_account",
+                "deploy_ecr_host",
+            ]
         )
 
     def _aws_client(self, service):
@@ -137,6 +139,7 @@ class Deployables2:
             service,
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
+            region_name=self.deploy_aws_region,
         )
         return client
 
