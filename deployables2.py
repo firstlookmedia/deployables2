@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import os
 import subprocess
 import datetime
@@ -71,7 +72,10 @@ class Deployables2:
         if keyfile:
             args += ["--build-arg", "GITHUB_MACHINE_USER_KEY={}".format(self.npm_token)]
         args += ["-t", self.deploy_docker_local_tag, "."]
-        self._exec(args)
+        if not self._exec(args):
+            return False
+        
+        return True
 
     def ecs_deploy_image(self):
         if not self._check_environment():
@@ -110,6 +114,8 @@ class Deployables2:
         args = ["docker", "push", target_tag]
         if not self._exec(args):
             return
+        
+        return True
 
     def _set_attributes_from_env(self, vars):
         for var, default in vars:
@@ -174,14 +180,16 @@ def main():
 def docker_build():
     """Build a docker image"""
     d = Deployables2()
-    d.docker_build()
+    if not d.docker_build():
+        sys.exit(1)
 
 
 @main.command()
 def ecs_deploy_image():
     """Deploy an ECS image"""
     d = Deployables2()
-    d.ecs_deploy_image()
+    if not d.ecs_deploy_image():
+        sys.exit(1)
 
 
 @main.command()
