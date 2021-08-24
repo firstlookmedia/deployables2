@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "deployables2"
+version = "0.1.0"
+description = ""
+authors = ["Micah Lee <micah.lee@firstlook.media>"]
+
+[tool.poetry.dependencies]
+python = "^3.6.2"
+boto3 = "^1.18.28"
+click = "^8.0.1"
+
+[tool.poetry.dev-dependencies]
+black = "^21.7b0"
+
+[tool.poetry.scripts]
+deployables = 'deployables2:main'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
