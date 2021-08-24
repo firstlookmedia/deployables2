@@ -34,7 +34,7 @@ class Deployables2:
 
     def docker_build(self):
         click.echo("Building docker image")
-        if not self._required_env(["DEPLOY_DOCKERFILE", "DEPLOY_DOCKER_LOCAL_TAG"]):
+        if not self._required_env(["deploy_dockerfile", "deploy_docker_local_tag"]):
             return
 
         click.echo("- DEPLOY_DOCKERFILE: {}".format(self.deploy_dockerfile))
@@ -113,7 +113,7 @@ class Deployables2:
 
     def _required_env(self, vars):
         for var in vars:
-            if os.environ.get(var) is None:
+            if self.__getattribute__(var) is None:
                 click.echo("Error: {} is required".format(var))
                 return False
 
@@ -121,12 +121,12 @@ class Deployables2:
 
     def _check_environment(self):
         return self._required_env(
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "DEPLOY_APP_NAME",
-            "DEPLOY_AWS_ACCOUNT",
-            "DEPLOY_ECR_ACCOUNT",
-            "DEPLOY_ECR_HOST",
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "deploy_app_name",
+            "deploy_aws_account",
+            "deploy_ecr_account",
+            "deploy_ecr_host",
         )
 
     def _aws_client(self, service):
