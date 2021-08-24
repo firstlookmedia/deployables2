@@ -3,6 +3,7 @@ import sys
 import os
 import subprocess
 import datetime
+import base64
 import click
 import boto3
 
@@ -88,17 +89,20 @@ class Deployables2:
         # Login to ECR
         client = self._aws_client("ecr")
         res = client.get_authorization_token(registryIds=[self.deploy_ecr_account])
-        token = res["authorizationData"][0]["authorizationToken"]
+
+        token = base64.b64decode(res["authorizationData"][0]["authorizationToken"])
+        username, password = tuple(token.decode().split(":"))
+
+        endpoint = res["authorizationData"][0]["proxyEndpoint"]
+
         args = [
             "docker",
             "login",
             "--username",
-            "AWS",
+            username,
             "--password",
-            token,
-            "https://{}.dkr.ecr.us-east-1.amazonaws.com".format(
-                self.deploy_ecr_account
-            ),
+            password,
+            endpoint,
         ]
         if not self._exec(args):
             return
