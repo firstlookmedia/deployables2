@@ -38,7 +38,6 @@ class Deployables2:
 
         self._display_vars(
             [
-                "deploy_dockerfile",
                 "deploy_docker_local_tag",
                 "deploy_github_machine_user_key_fingerprint",
             ]
