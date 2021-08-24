@@ -104,7 +104,7 @@ class Deployables2:
             password,
             endpoint,
         ]
-        if not self._exec(args):
+        if not self._exec(args, redact=True):
             return
 
         # Tag the image
@@ -162,8 +162,11 @@ class Deployables2:
         for var in vars:
             click.echo("- {} = {}".format(var, self.__getattribute__(var)))
 
-    def _exec(self, args):
-        click.echo("Executing: {}".format(args))
+    def _exec(self, args, redact=False):
+        if redact:
+            click.echo("Executing: [redacted]")
+        else:
+            click.echo("Executing: {}".format(args))
         p = subprocess.run(args)
 
         if p.returncode != 0:
