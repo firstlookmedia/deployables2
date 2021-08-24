@@ -18,7 +18,6 @@ class Deployables2:
                 ("DEPLOY_AWS_ACCOUNT", None),
                 ("DEPLOY_AWS_REGION", "us-east-1"),
                 ("DEPLOY_AWS_ROLE", "ops-admin"),
-                ("DEPLOY_DOCKERFILE", "./Dockerfile"),
                 ("DEPLOY_DOCKER_LOCAL_TAG", os.environ.get("DEPLOY_APP_NAME")),
                 ("DEPLOY_ECR_ACCOUNT", None),
                 ("DEPLOY_ECR_HOST", None),
@@ -34,11 +33,16 @@ class Deployables2:
 
     def docker_build(self):
         click.echo("Building docker image")
-        if not self._required_env(["deploy_dockerfile", "deploy_docker_local_tag"]):
+        if not self._required_env(["deploy_docker_local_tag"]):
             return
 
-        click.echo("- DEPLOY_DOCKERFILE: {}".format(self.deploy_dockerfile))
-        click.echo("- DEPLOY_DOCKER_LOCAL_TAG: {}".format(self.deploy_docker_local_tag))
+        self._display_vars(
+            [
+                "deploy_dockerfile",
+                "deploy_docker_local_tag",
+                "deploy_github_machine_user_key_fingerprint",
+            ]
+        )
 
         if self.deploy_github_machine_user_key_fingerprint:
             fingerprint = self.deploy_github_machine_user_key_fingerprint.replace(
@@ -66,7 +70,7 @@ class Deployables2:
             args += ["--build-arg", "NPM_TOKEN={}".format(self.npm_token)]
         if keyfile:
             args += ["--build-arg", "GITHUB_MACHINE_USER_KEY={}".format(self.npm_token)]
-        args += ["-t", self.deploy_docker_local_tag, "-f", self.deploy_dockerfile]
+        args += ["-t", self.deploy_docker_local_tag, "."]
         self._exec(args)
 
     def ecs_deploy_image(self):
@@ -143,6 +147,10 @@ class Deployables2:
             tag += "-{}".format(self.flm_env)
 
         return tag
+
+    def _display_vars(self, vars):
+        for var in vars:
+            click.echo("- {} = {}".format(var, self.__getattribute__(var)))
 
     def _exec(self, args):
         click.echo("Executing: {}".format(args))
