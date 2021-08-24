@@ -92,12 +92,10 @@ class Deployables2:
         args = [
             "docker",
             "login",
-            "-u",
+            "--username",
             "AWS",
-            "-p",
+            "--password",
             token,
-            "-e",
-            "none",
             "https://{}.dkr.ecr.us-east-1.amazonaws.com".format(
                 self.deploy_ecr_account
             ),
