@@ -233,10 +233,10 @@ class Deployables2:
                 services=[service],
             )
 
-            finished = True
+            finished = False
             for deployment in res["services"][0]["deployments"]:
-                if deployment["taskDefinition"] != revision_target:
-                    finished = False
+                if deployment["taskDefinition"] == revision_target and deployment["rolloutState"] == "COMPLETED":
+                    finished = True
                     break
 
             if finished:
