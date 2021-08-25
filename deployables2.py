@@ -235,7 +235,7 @@ class Deployables2:
 
             found = False
             for deployment in res["services"][0]["deployments"]:
-                print(deployment)
+                print(f"{deployment['taskDefinition']}: {deployment['status']}")
                 if deployment["status"] == "ACTIVE" and deployment["taskDefinition"] == revision_target:
                     found = True
                     break
