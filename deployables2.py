@@ -208,12 +208,6 @@ class Deployables2:
         revision_target = res["taskDefinition"]["taskDefinitionArn"]
         click.echo(f"Target revision: {revision_target}")
 
-        click.echo("describing clusters")
-        res = client.describe_clusters()
-        click.echo(res)
-        for cluster in res["clusters"]:
-            click.echo(f"{cluster['clusterName']} - {cluster['clusterArn']}")
-
         # Update the service
         service = family
         click.echo("Updating service:")
@@ -241,7 +235,8 @@ class Deployables2:
 
             found = False
             for deployment in res["services"][0]["deployments"]:
-                if deployment["taskDefinition"] == revision_target:
+                print(deployment)
+                if deployment["status"] == "ACTIVE" and deployment["taskDefinition"] == revision_target:
                     found = True
                     break
 
