@@ -158,7 +158,7 @@ class Deployables2:
         if not self._check_environment():
             return
 
-        client = self._aws_client("ecs")
+        client = self._aws_client("ecs", True)
 
         # Get family name
         if self.vars["DEPLOY_ECS_SUBFAMILY"]:
@@ -180,15 +180,15 @@ class Deployables2:
             template = jinja2.Template(f.read())
 
         template_vars = self.vars.copy()
+        template_vars["DEPLOY_IMAGE_TAG"] = self._get_target_image_tag()
         template_vars[
             "DEPLOY_IMAGE_NAME"
-        ] = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{deploy_image_tag}"
-        template_vars["DEPLOY_IMAGE_TAG"] = self._get_target_image_tag()
+        ] = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{template_vars['DEPLOY_IMAGE_TAG']}"
 
-        task_def = json.loads(template.render(*template_vars))
+        task_def = json.loads(template.render(template_vars))
 
         # Register the new task def
-        if self.deploy_ecs_fargate:
+        if self.vars["DEPLOY_ECS_FARGATE"]:
             res = client.register_task_definition(
                 family=family,
                 taskRoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_ECS_FARGATE_TASK_ROLE_NAME']}",
@@ -208,8 +208,18 @@ class Deployables2:
         revision_target = res["taskDefinition"]["taskDefinitionArn"]
         click.echo(f"Target revision: {revision_target}")
 
+        click.echo("describing clusters")
+        res = client.describe_clusters()
+        click.echo(res)
+        for cluster in res["clusters"]:
+            click.echo(f"{cluster['clusterName']} - {cluster['clusterArn']}")
+
         # Update the service
         service = family
+        click.echo("Updating service:")
+        click.echo(f"- cluster: {self.vars['DEPLOY_ECS_CLUSTER_NAME']}")
+        click.echo(f"- service: {service}")
+        click.echo(f"- taskDefinition: {revision_target}")
         res = client.update_service(
             cluster=self.vars["DEPLOY_ECS_CLUSTER_NAME"],
             service=service,
@@ -269,13 +279,33 @@ class Deployables2:
             ]
         )
 
-    def _aws_client(self, service):
-        client = boto3.client(
-            service,
-            aws_access_key_id=self.vars["AWS_ACCESS_KEY_ID"],
-            aws_secret_access_key=self.vars["AWS_SECRET_ACCESS_KEY"],
-            region_name=self.vars["DEPLOY_AWS_REGION"],
-        )
+    def _aws_client(self, service, assume_role=False):
+        if assume_role:
+            boto_sts = boto3.client("sts")
+            sts_response = boto_sts.assume_role(
+                RoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_AWS_ROLE']}",
+                RoleSessionName="session",
+            )
+            aws_access_key_id = sts_response["Credentials"]["AccessKeyId"]
+            aws_secret_access_key = sts_response["Credentials"]["SecretAccessKey"]
+            aws_session_token = sts_response["Credentials"]["SessionToken"]
+
+            client = boto3.client(
+                service,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                aws_session_token=aws_session_token,
+                region_name=self.vars["DEPLOY_AWS_REGION"],
+            )
+
+        else:
+            client = boto3.client(
+                service,
+                aws_access_key_id=self.vars["AWS_ACCESS_KEY_ID"],
+                aws_secret_access_key=self.vars["AWS_SECRET_ACCESS_KEY"],
+                region_name=self.vars["DEPLOY_AWS_REGION"],
+            )
+
         return client
 
     def _get_target_image_tag(self):
