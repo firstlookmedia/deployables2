@@ -233,16 +233,13 @@ class Deployables2:
                 services=[service],
             )
 
-            found = False
-            if (
-                len(res["services"][0]["deployments"]) == 1
-                and res["services"][0]["deployments"][0]["taskDefinition"]
-                == revision_target
-            ):
-                found = True
-                break
+            finished = True
+            for deployment in res["services"][0]["deployments"]:
+                if deployment["taskDefinition"] != revision_target:
+                    finished = False
+                    break
 
-            if found:
+            if finished:
                 click.echo("Success!")
                 return True
 
