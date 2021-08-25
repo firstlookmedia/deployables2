@@ -35,6 +35,7 @@ class Deployables2:
                 ("DEPLOY_ECS_SUBFAMILY", None),
                 ("DEPLOY_ENV_TO_TAG", None),
                 ("DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT", None),
+                ("DEPLOY_TASK_DEF_TEMPLATE", None),
                 ("DEPLOY_SHA1", None),
                 ("FLM_ENV", None),
                 ("NPM_TOKEN", None),
