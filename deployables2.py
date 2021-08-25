@@ -107,9 +107,11 @@ class Deployables2:
         if self.vars["NPM_TOKEN"]:
             args += ["--build-arg", f"NPM_TOKEN={self.vars['NPM_TOKEN']}"]
         if keyfile:
-            args += ["--build-arg", f"GITHUB_MACHINE_USER_KEY={keyfile}"]
+            with open(keyfile) as f:
+                key_content = f.read()
+            args += ["--build-arg", f"GITHUB_MACHINE_USER_KEY={key_content}"]
         args += ["-t", self.vars["DEPLOY_DOCKER_LOCAL_TAG"], "."]
-        if not self._exec(args):
+        if not self._exec(args, redact=True):
             return False
 
         return True
