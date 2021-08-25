@@ -64,6 +64,7 @@ class Deployables2:
                 ("PERSIST_QUERIES", ""),
                 ("STATIC_QUERY_SUFFIX", ""),
                 ("PREVIEW_TURNSTILE_AUTH_TOKEN", ""),
+                ("FIRSTLOOKMEDIA_ORIGIN", ""),
             ]
         )
 
