@@ -24,6 +24,7 @@ class Deployables2:
                 ("DEPLOY_ECR_ACCOUNT", None),
                 ("DEPLOY_ECR_HOST", None),
                 ("DEPLOY_ECS_CLUSTER_NAME", "stargate"),
+                ("DEPLOY_ECS_SUBFAMILY", None),
                 ("DEPLOY_ENV_TO_TAG", None),
                 ("DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT", None),
                 ("DEPLOY_SHA1", None),
@@ -50,41 +51,39 @@ class Deployables2:
             fingerprint = self.deploy_github_machine_user_key_fingerprint.replace(
                 ":", ""
             )
-            keyfile = os.path.expanduser("~/.ssh/id_{}".format(fingerprint))
+            keyfile = os.path.expanduser(f"~/.ssh/id_{fingerprint}")
 
             if not os.path.exists(keyfile):
                 click.echo("Error: Unable to find machine user key file")
-                click.echo("- fingerprint: {}".format(fingerprint))
-                click.echo("- keyfile: {}".format(keyfile))
+                click.echo(f"- fingerprint: {fingerprint}")
+                click.echo(f"- keyfile: {keyfile}")
 
                 keyfile = os.path.expanduser("~/.ssh/id_circleci_github")
                 if not os.path.exists(keyfile):
                     click.echo("Error: Unable to find circle github key file")
-                    click.echo("- keyfile: {}".format(keyfile))
+                    click.echo(f"- keyfile: {keyfile}")
                     return
 
-            click.echo("Using GITHUB_MACHINE_USER_KEY: {}".format(keyfile))
+            click.echo(f"Using GITHUB_MACHINE_USER_KEY: {keyfile}")
         else:
             keyfile = None
 
         args = ["docker", "build", "--rm=false"]
         if self.npm_token:
-            args += ["--build-arg", "NPM_TOKEN={}".format(self.npm_token)]
+            args += ["--build-arg", f"NPM_TOKEN={self.npm_token}"]
         if keyfile:
-            args += ["--build-arg", "GITHUB_MACHINE_USER_KEY={}".format(self.npm_token)]
+            args += ["--build-arg", f"GITHUB_MACHINE_USER_KEY={self.npm_token}"]
         args += ["-t", self.deploy_docker_local_tag, "."]
         if not self._exec(args):
             return False
-        
+
         return True
 
     def ecs_deploy_image(self):
         if not self._check_environment():
             return
 
-        target_tag = "{}/{}:{}".format(
-            self.deploy_ecr_host, self.deploy_app_name, self._get_target_image_tag()
-        )
+        target_tag = f"{self.deploy_ecr_host}/{self.deploy_app_name}:{self._get_target_image_tag()}"
 
         # Login to ECR
         client = self._aws_client("ecr")
@@ -116,8 +115,47 @@ class Deployables2:
         args = ["docker", "push", target_tag]
         if not self._exec(args):
             return
-        
+
         return True
+
+    def ecs_deploy(self):
+        if not self._check_environment():
+            return
+
+        tag = self._get_target_image_tag()
+
+        # Deploy the image
+        if not self.ecs_deploy_image():
+            return False
+
+        # Update the service
+        if not self._ecs_deploy_task(tag, self.deploy_ecs_subfamily):
+            return False
+
+    def _ecs_deploy_task(self, tag, subfamily):
+        image = f"{self.deploy_ecr_host}/{self.deploy_app_name}:{tag}"
+
+        if subfamily:
+            family = f"{self.deploy_app_name}-{subfamily}"
+        else:
+            family = self.deploy_app_name
+
+        click.echo(f"Current task definition: {family}")
+
+        client = self._aws_client("ecs")
+        ret = client.describe_services(
+            cluster=self.deploy_ecs_cluster_name, services=[family]
+        )
+        if len(ret["services"]) == 0:
+            return False
+
+        previous_task_def = ret["services"][0]["taskDefinition"]
+        click.echo(f"Previous task definition: {previous_task_def}")
+
+        if not os.path.exists():
+            click.echo(f"Error: template '{self.deploy_task_def_template}' not found")
+
+        # TODO: finish implementing
 
     def _set_attributes_from_env(self, vars):
         for var, default in vars:
@@ -126,7 +164,7 @@ class Deployables2:
     def _required_env(self, vars):
         for var in vars:
             if self.__getattribute__(var) is None:
-                click.echo("Error: {} is required".format(var))
+                click.echo(f"Error: {var} is required")
                 return False
 
         return True
@@ -152,25 +190,25 @@ class Deployables2:
         return client
 
     def _get_target_image_tag(self):
-        tag = "{}-{}".format(self.current_date, self.deploy_sha1)
+        tag = f"{self.current_date}-{self.deploy_sha1}"
         if self.deploy_env_to_tag:
-            tag += "-{}".format(self.flm_env)
+            tag += f"-{self.flm_env}"
 
         return tag
 
     def _display_vars(self, vars):
         for var in vars:
-            click.echo("- {} = {}".format(var, self.__getattribute__(var)))
+            click.echo(f"- {var} = {self.__getattribute__(var)}")
 
     def _exec(self, args, redact=False):
         if redact:
             click.echo("Executing: [redacted]")
         else:
-            click.echo("Executing: {}".format(args))
+            click.echo(f"Executing: {args}")
         p = subprocess.run(args)
 
         if p.returncode != 0:
-            click.echo("return code: {}".format(p.returncode))
+            click.echo(f"return code: {p.returncode}")
             return False
 
         return True
@@ -200,7 +238,9 @@ def ecs_deploy_image():
 @main.command()
 def ecs_deploy():
     """Deploy an ECS service"""
-    click.echo("Not implemented")
+    d = Deployables2()
+    if not d.ecs_deploy():
+        sys.exit(1)
 
 
 if __name__ == "__main__":
