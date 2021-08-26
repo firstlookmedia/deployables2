@@ -2,7 +2,7 @@
 import sys
 import click
 
-from deployables2 import Deployables2
+from .deployables2 import Deployables2
 
 
 @click.group()
