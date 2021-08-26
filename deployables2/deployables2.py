@@ -12,57 +12,13 @@ import jinja2
 class Deployables2:
     def __init__(self):
         self._load_vars_from_env(
-            [
-                ("AWS_ACCESS_KEY_ID", None),
-                ("AWS_SECRET_ACCESS_KEY", None),
-                ("DEPLOY_ADD_ENV_TO_TAG", None),
-                ("DEPLOY_APP_NAME", None),
-                ("DEPLOY_AWS_ACCOUNT", None),
-                ("DEPLOY_AWS_REGION", "us-east-1"),
-                ("DEPLOY_AWS_ROLE", "ops-admin"),
-                ("DEPLOY_DOCKER_LOCAL_TAG", os.environ.get("DEPLOY_APP_NAME")),
-                ("DEPLOY_ECR_ACCOUNT", None),
-                ("DEPLOY_ECS_FARGATE", False),
-                ("DEPLOY_ECS_FARGATE_CPU", "256"),
-                ("DEPLOY_ECS_FARGATE_MEMORY", "512"),
-                ("DEPLOY_ECS_FARGATE_EXECUTION_ROLE_NAME", None),
-                ("DEPLOY_ECS_FARGATE_TASK_ROLE_NAME", None),
-                ("DEPLOY_ECR_HOST", None),
-                ("DEPLOY_ECS_CLUSTER_NAME", None),
-                ("DEPLOY_ECS_SUBFAMILY", None),
-                ("DEPLOY_ENV_TO_TAG", None),
-                ("DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT", None),
-                ("DEPLOY_TASK_DEF_TEMPLATE", None),
-                ("DEPLOY_SHA1", None),
-                ("FLM_ENV", None),
-                ("NPM_TOKEN", None),
-                # For task def templates
-                ("TASK_MEMORY", os.environ.get("DEPLOY_ECS_FARGATE_MEMORY", "512")),
-                ("BASIC_AUTH_PASS", ""),
-                ("BASIC_AUTH_USER", ""),
-                ("DEBUG_TRACKING", ""),
-                ("FALCON_ORIGIN", ""),
-                ("FB_PIXEL_ID", ""),
-                ("GA_ID", ""),
-                ("CIRCLE_BRANCH", ""),
-                ("CIRCLE_SHA1", ""),
-                ("CIRCLE_TAG", ""),
-                ("GRAPHQL_ORIGIN", ""),
-                ("GTM_AUTH", ""),
-                ("GTM_PREVIEW", ""),
-                ("GTM", ""),
-                ("ORIGIN", ""),
-                ("PARSELY_ID", ""),
-                ("REDIRECT_WWW", ""),
-                ("SENTRY_DSN", ""),
-                ("SERVER_TYPE", ""),
-                ("SHOW_ERRORS", ""),
-                ("TURNSTILE_ORIGIN", ""),
-                ("PERSIST_QUERIES", ""),
-                ("STATIC_QUERY_SUFFIX", ""),
-                ("PREVIEW_TURNSTILE_AUTH_TOKEN", ""),
-                ("FIRSTLOOKMEDIA_ORIGIN", ""),
-            ]
+            {
+                "DEPLOY_AWS_REGION": "us-east-1",
+                "DEPLOY_AWS_ROLE": "ops-admin",
+                "DEPLOY_DOCKER_LOCAL_TAG": os.environ.get("DEPLOY_APP_NAME", ""),
+                "DEPLOY_ECS_FARGATE_CPU": "256",
+                "DEPLOY_ECS_FARGATE_MEMORY": "512",
+            }
         )
 
         self.current_date = datetime.datetime.now().strftime("%Y%m%d")
@@ -79,10 +35,10 @@ class Deployables2:
             ]
         )
 
-        if self.vars["DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT"]:
-            fingerprint = self.vars[
+        if self.env.get("DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT"):
+            fingerprint = self.env.get(
                 "DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT"
-            ].replace(":", "")
+            ).replace(":", "")
             keyfile = os.path.expanduser(f"~/.ssh/id_{fingerprint}")
 
             if not os.path.exists(keyfile):
@@ -101,13 +57,13 @@ class Deployables2:
             keyfile = None
 
         args = ["docker", "build", "--rm=false"]
-        if self.vars["NPM_TOKEN"]:
-            args += ["--build-arg", f"NPM_TOKEN={self.vars['NPM_TOKEN']}"]
+        if self.env.get("NPM_TOKEN"):
+            args += ["--build-arg", f"NPM_TOKEN={self.env.get('NPM_TOKEN')}"]
         if keyfile:
             with open(keyfile) as f:
                 key_content = f.read()
             args += ["--build-arg", f"GITHUB_MACHINE_USER_KEY={key_content}"]
-        args += ["-t", self.vars["DEPLOY_DOCKER_LOCAL_TAG"], "."]
+        args += ["-t", self.env.get("DEPLOY_DOCKER_LOCAL_TAG"), "."]
         if not self._exec(args, redact=True):
             return False
 
@@ -117,12 +73,12 @@ class Deployables2:
         if not self._check_environment():
             return
 
-        target_tag = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{self._get_target_image_tag()}"
+        target_tag = f"{self.env.get('DEPLOY_ECR_HOST')}/{self.env.get('DEPLOY_APP_NAME')}:{self._get_target_image_tag()}"
 
         # Login to ECR
         client = self._aws_client("ecr")
         res = client.get_authorization_token(
-            registryIds=[self.vars["DEPLOY_ECR_ACCOUNT"]]
+            registryIds=[self.env.get("DEPLOY_ECR_ACCOUNT")]
         )
 
         token = base64.b64decode(res["authorizationData"][0]["authorizationToken"])
@@ -143,7 +99,7 @@ class Deployables2:
             return
 
         # Tag the image
-        args = ["docker", "tag", self.vars["DEPLOY_DOCKER_LOCAL_TAG"], target_tag]
+        args = ["docker", "tag", self.env.get("DEPLOY_DOCKER_LOCAL_TAG"), target_tag]
         if not self._exec(args):
             return
 
@@ -161,41 +117,39 @@ class Deployables2:
         client = self._aws_client("ecs", True)
 
         # Get family name
-        if self.vars["DEPLOY_ECS_SUBFAMILY"]:
-            family = (
-                f"{self.vars['DEPLOY_APP_NAME']}-{self.vars['DEPLOY_ECS_SUBFAMILY']}"
-            )
+        if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+            family = f"{self.env.get('DEPLOY_APP_NAME')}-{self.env.get('DEPLOY_ECS_SUBFAMILY')}"
         else:
-            family = self.vars["DEPLOY_APP_NAME"]
+            family = self.env.get("DEPLOY_APP_NAME")
 
         # Render the template
-        if not os.path.exists(self.vars["DEPLOY_TASK_DEF_TEMPLATE"]):
+        if not os.path.exists(self.env.get("DEPLOY_TASK_DEF_TEMPLATE")):
             click.echo(
-                "Error: template '{self.vars['DEPLOY_TASK_DEF_TEMPLATE']}' not found"
+                f"Error: template '{self.env.get('DEPLOY_TASK_DEF_TEMPLATE')}' not found"
             )
 
-        with open(self.vars["DEPLOY_TASK_DEF_TEMPLATE"]) as f:
+        with open(self.env.get("DEPLOY_TASK_DEF_TEMPLATE")) as f:
             template = jinja2.Template(f.read())
 
-        template_vars = self.vars.copy()
+        template_vars = self.env.copy()
         template_vars["DEPLOY_IMAGE_TAG"] = self._get_target_image_tag()
         template_vars[
             "DEPLOY_IMAGE_NAME"
-        ] = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{template_vars['DEPLOY_IMAGE_TAG']}"
+        ] = f"{self.env.get('DEPLOY_ECR_HOST')}/{self.env.get('DEPLOY_APP_NAME')}:{template_vars['DEPLOY_IMAGE_TAG']}"
 
         task_def = json.loads(template.render(template_vars))
 
         # Register the new task def
-        if self.vars["DEPLOY_ECS_FARGATE"]:
+        if self.env.get("DEPLOY_ECS_FARGATE"):
             res = client.register_task_definition(
                 family=family,
-                taskRoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_ECS_FARGATE_TASK_ROLE_NAME']}",
-                executionRoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_ECS_FARGATE_EXECUTION_ROLE_NAME']}",
+                taskRoleArn=f"arn:aws:iam::{self.env.get('DEPLOY_AWS_ACCOUNT')}:role/{self.env.get('DEPLOY_ECS_FARGATE_TASK_ROLE_NAME')}",
+                executionRoleArn=f"arn:aws:iam::{self.env.get('DEPLOY_AWS_ACCOUNT')}:role/{self.env.get('DEPLOY_ECS_FARGATE_EXECUTION_ROLE_NAME')}",
                 networkMode="awsvpc",
                 containerDefinitions=task_def,
                 requiresCompatibilities=["FARGATE"],
-                cpu=self.vars["DEPLOY_ECS_FARGATE_CPU"],
-                memory=self.vars["DEPLOY_ECS_FARGATE_MEMORY"],
+                cpu=self.env.get("DEPLOY_ECS_FARGATE_CPU"),
+                memory=self.env.get("DEPLOY_ECS_FARGATE_MEMORY"),
             )
         else:
             res = client.register_task_definition(
@@ -208,11 +162,11 @@ class Deployables2:
         # Update the service
         service = family
         click.echo("Updating service:")
-        click.echo(f"- cluster: {self.vars['DEPLOY_ECS_CLUSTER_NAME']}")
+        click.echo(f"- cluster: {self.env.get('DEPLOY_ECS_CLUSTER_NAME')}")
         click.echo(f"- service: {service}")
         click.echo(f"- taskDefinition: {revision_target}")
         res = client.update_service(
-            cluster=self.vars["DEPLOY_ECS_CLUSTER_NAME"],
+            cluster=self.env.get("DEPLOY_ECS_CLUSTER_NAME"),
             service=service,
             taskDefinition=revision_target,
         )
@@ -226,7 +180,7 @@ class Deployables2:
         # Wait for old revision to disappear
         for _ in range(100):
             res = client.describe_services(
-                cluster=self.vars["DEPLOY_ECS_CLUSTER_NAME"],
+                cluster=self.env.get("DEPLOY_ECS_CLUSTER_NAME"),
                 services=[service],
             )
 
@@ -249,14 +203,18 @@ class Deployables2:
         click.echo("Error: Service update took too long")
         return False
 
-    def _load_vars_from_env(self, vars):
-        self.vars = {}
-        for var, default in vars:
-            self.vars[var] = os.environ.get(var, default)
+    def _load_vars_from_env(self, defaults):
+        self.env = defaults.copy()
+        for var in os.environ:
+            self.env[var] = os.environ.get(var, "")
 
     def _required_env(self, vars):
         for var in vars:
-            if var not in self.vars:
+            if (
+                var not in self.env
+                or self.env.get(var) is None
+                or self.env.get(var) == ""
+            ):
                 click.echo(f"Error: {var} is required")
                 return False
 
@@ -277,7 +235,7 @@ class Deployables2:
         if assume_role:
             boto_sts = boto3.client("sts")
             sts_response = boto_sts.assume_role(
-                RoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_AWS_ROLE']}",
+                RoleArn=f"arn:aws:iam::{self.env.get('DEPLOY_AWS_ACCOUNT')}:role/{self.env.get('DEPLOY_AWS_ROLE')}",
                 RoleSessionName="session",
             )
             aws_access_key_id = sts_response["Credentials"]["AccessKeyId"]
@@ -289,29 +247,29 @@ class Deployables2:
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
                 aws_session_token=aws_session_token,
-                region_name=self.vars["DEPLOY_AWS_REGION"],
+                region_name=self.env.get("DEPLOY_AWS_REGION"),
             )
 
         else:
             client = boto3.client(
                 service,
-                aws_access_key_id=self.vars["AWS_ACCESS_KEY_ID"],
-                aws_secret_access_key=self.vars["AWS_SECRET_ACCESS_KEY"],
-                region_name=self.vars["DEPLOY_AWS_REGION"],
+                aws_access_key_id=self.env.get("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=self.env.get("AWS_SECRET_ACCESS_KEY"),
+                region_name=self.env.get("DEPLOY_AWS_REGION"),
             )
 
         return client
 
     def _get_target_image_tag(self):
-        tag = f"{self.current_date}-{self.vars['DEPLOY_SHA1']}"
-        if self.vars["DEPLOY_ENV_TO_TAG"]:
-            tag += f"-{self.vars['FLM_ENV']}"
+        tag = f"{self.current_date}-{self.env.get('DEPLOY_SHA1')}"
+        if self.env.get("DEPLOY_ENV_TO_TAG"):
+            tag += f"-{self.env.get('FLM_ENV')}"
 
         return tag
 
     def _display_vars(self, vars):
         for var in vars:
-            click.echo(f"- {var} = {self.vars[var]}")
+            click.echo(f"- {var} = {self.env.get(var)}")
 
     def _exec(self, args, redact=False):
         if redact:
