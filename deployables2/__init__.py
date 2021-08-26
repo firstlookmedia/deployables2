@@ -20,17 +20,17 @@ def docker_build():
 
 @main.command()
 def ecs_deploy_image():
-    """Deploy an ECS image"""
+    """Upload a docker image to ECR"""
     d = Deployables2()
     if not d.ecs_deploy_image():
         sys.exit(1)
 
 
 @main.command()
-def ecs_deploy():
-    """Deploy an ECS service"""
+def ecs_update_service():
+    """Deploy a new task to an ECS service"""
     d = Deployables2()
-    if not d.ecs_deploy():
+    if not d.ecs_update_service():
         sys.exit(1)
 
 

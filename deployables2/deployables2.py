@@ -154,7 +154,7 @@ class Deployables2:
 
         return True
 
-    def ecs_deploy(self):
+    def ecs_update_service(self):
         if not self._check_environment():
             return
 

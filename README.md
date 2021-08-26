@@ -14,9 +14,9 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  docker-build      Build a docker image
-  ecs-deploy        Deploy an ECS service
-  ecs-deploy-image  Deploy an ECS image
+  docker-build        Build a docker image
+  ecs-deploy-image    Upload a docker image to ECR
+  ecs-update-service  Deploy a new task to an ECS service
 ```
 
 Most of the input happens through environment variables.
