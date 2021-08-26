@@ -86,30 +86,30 @@ class Deployables2:
             fingerprint = self.vars[
                 "DEPLOY_GITHUB_MACHINE_USER_KEY_FINGERPRINT"
             ].replace(":", "")
-            keyfile = os.path.expanduser(f"~/.ssh/id_{fingerprint}")
+            keyfile = os.path.expanduser("~/.ssh/id_{}".format(fingerprint))
 
             if not os.path.exists(keyfile):
                 click.echo("Error: Unable to find machine user key file")
-                click.echo(f"- fingerprint: {fingerprint}")
-                click.echo(f"- keyfile: {keyfile}")
+                click.echo("- fingerprint: {}".format(fingerprint))
+                click.echo("- keyfile: {}".format(keyfile))
 
                 keyfile = os.path.expanduser("~/.ssh/id_circleci_github")
                 if not os.path.exists(keyfile):
                     click.echo("Error: Unable to find circle github key file")
-                    click.echo(f"- keyfile: {keyfile}")
+                    click.echo("- keyfile: {}".format(keyfile))
                     return
 
-            click.echo(f"Using GITHUB_MACHINE_USER_KEY: {keyfile}")
+            click.echo("Using GITHUB_MACHINE_USER_KEY: {}".format(keyfile))
         else:
             keyfile = None
 
         args = ["docker", "build", "--rm=false"]
         if self.vars["NPM_TOKEN"]:
-            args += ["--build-arg", f"NPM_TOKEN={self.vars['NPM_TOKEN']}"]
+            args += ["--build-arg", "NPM_TOKEN={}".format(self.vars["NPM_TOKEN"])]
         if keyfile:
             with open(keyfile) as f:
                 key_content = f.read()
-            args += ["--build-arg", f"GITHUB_MACHINE_USER_KEY={key_content}"]
+            args += ["--build-arg", "GITHUB_MACHINE_USER_KEY={}".format(key_content)]
         args += ["-t", self.vars["DEPLOY_DOCKER_LOCAL_TAG"], "."]
         if not self._exec(args, redact=True):
             return False
@@ -120,7 +120,11 @@ class Deployables2:
         if not self._check_environment():
             return
 
-        target_tag = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{self._get_target_image_tag()}"
+        target_tag = "{}/{}:{}".format(
+            self.vars["DEPLOY_ECR_HOST"],
+            self.vars["DEPLOY_APP_NAME"],
+            self._get_target_image_tag(),
+        )
 
         # Login to ECR
         client = self._aws_client("ecr")
@@ -165,18 +169,20 @@ class Deployables2:
 
         # Get family name
         if self.vars["DEPLOY_ECS_SUBFAMILY"]:
-            family = (
-                f"{self.vars['DEPLOY_APP_NAME']}-{self.vars['DEPLOY_ECS_SUBFAMILY']}"
+            family = "{}-{}".format(
+                self.vars["DEPLOY_APP_NAME"], self.vars["DEPLOY_ECS_SUBFAMILY"]
             )
         else:
             family = self.vars["DEPLOY_APP_NAME"]
 
-        click.echo(f"Family: {family}")
+        click.echo("Family: {}".format(family))
 
         # Render the template
         if not os.path.exists(self.vars["DEPLOY_TASK_DEF_TEMPLATE"]):
             click.echo(
-                f"Error: template '{self.vars['DEPLOY_TASK_DEF_TEMPLATE']}' not found"
+                "Error: template '{}' not found".format(
+                    self.vars["DEPLOY_TASK_DEF_TEMPLATE"]
+                )
             )
 
         with open(self.vars["DEPLOY_TASK_DEF_TEMPLATE"]) as f:
@@ -184,9 +190,11 @@ class Deployables2:
 
         template_vars = self.vars.copy()
         template_vars["DEPLOY_IMAGE_TAG"] = self._get_target_image_tag()
-        template_vars[
-            "DEPLOY_IMAGE_NAME"
-        ] = f"{self.vars['DEPLOY_ECR_HOST']}/{self.vars['DEPLOY_APP_NAME']}:{template_vars['DEPLOY_IMAGE_TAG']}"
+        template_vars["DEPLOY_IMAGE_NAME"] = "{}/{}:{}".format(
+            self.vars["DEPLOY_ECR_HOST"],
+            self.vars["DEPLOY_APP_NAME"],
+            template_vars["DEPLOY_IMAGE_TAG"],
+        )
 
         task_def = json.loads(template.render(template_vars))
 
@@ -194,8 +202,14 @@ class Deployables2:
         if self.vars["DEPLOY_ECS_FARGATE"]:
             res = client.register_task_definition(
                 family=family,
-                taskRoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_ECS_FARGATE_TASK_ROLE_NAME']}",
-                executionRoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_ECS_FARGATE_EXECUTION_ROLE_NAME']}",
+                taskRoleArn="arn:aws:iam::{}:role/{}".format(
+                    self.vars["DEPLOY_AWS_ACCOUNT"],
+                    self.vars["DEPLOY_ECS_FARGATE_TASK_ROLE_NAME"],
+                ),
+                executionRoleArn="arn:aws:iam::{}:role/{}".format(
+                    self.vars["DEPLOY_AWS_ACCOUNT"],
+                    self.vars["DEPLOY_ECS_FARGATE_EXECUTION_ROLE_NAME"],
+                ),
                 networkMode="awsvpc",
                 containerDefinitions=task_def,
                 requiresCompatibilities=["FARGATE"],
@@ -209,14 +223,14 @@ class Deployables2:
             )
 
         revision_target = res["taskDefinition"]["taskDefinitionArn"]
-        click.echo(f"Target revision: {revision_target}")
+        click.echo("Target revision: {}".format(revision_target))
 
         # Update the service
         service = family
         click.echo("Updating service:")
-        click.echo(f"- cluster: {self.vars['DEPLOY_ECS_CLUSTER_NAME']}")
-        click.echo(f"- service: {service}")
-        click.echo(f"- taskDefinition: {revision_target}")
+        click.echo("- cluster: {}".format(self.vars["DEPLOY_ECS_CLUSTER_NAME"]))
+        click.echo("- service: {}".format(service))
+        click.echo("- taskDefinition: {}".format(revision_target))
         res = client.update_service(
             cluster=self.vars["DEPLOY_ECS_CLUSTER_NAME"],
             service=service,
@@ -226,7 +240,7 @@ class Deployables2:
         revision_actual = res["service"]["taskDefinition"]
         if revision_target != revision_actual:
             click.echo("Error updating service: target does not match actual")
-            click.echo(f"{revision_target} != {revision_actual}")
+            click.echo("{} != {}".format(revision_target, revision_actual))
             return False
 
         # Wait for old revision to disappear
@@ -263,7 +277,7 @@ class Deployables2:
     def _required_env(self, vars):
         for var in vars:
             if var not in self.vars:
-                click.echo(f"Error: {var} is required")
+                click.echo("Error: {} is required".format(var))
                 return False
 
         return True
@@ -283,7 +297,9 @@ class Deployables2:
         if assume_role:
             boto_sts = boto3.client("sts")
             sts_response = boto_sts.assume_role(
-                RoleArn=f"arn:aws:iam::{self.vars['DEPLOY_AWS_ACCOUNT']}:role/{self.vars['DEPLOY_AWS_ROLE']}",
+                RoleArn="arn:aws:iam::{}:role/{}".format(
+                    self.vars["DEPLOY_AWS_ACCOUNT"], self.vars["DEPLOY_AWS_ROLE"]
+                ),
                 RoleSessionName="session",
             )
             aws_access_key_id = sts_response["Credentials"]["AccessKeyId"]
@@ -309,25 +325,25 @@ class Deployables2:
         return client
 
     def _get_target_image_tag(self):
-        tag = f"{self.current_date}-{self.vars['DEPLOY_SHA1']}"
+        tag = "{}-{}".format(self.current_date, self.vars["DEPLOY_SHA1"])
         if self.vars["DEPLOY_ENV_TO_TAG"]:
-            tag += f"-{self.vars['FLM_ENV']}"
+            tag += "-{}".format(self.vars["FLM_ENV"])
 
         return tag
 
     def _display_vars(self, vars):
         for var in vars:
-            click.echo(f"- {var} = {self.vars[var]}")
+            click.echo("- {} = {}".format(var, self.vars[var]))
 
     def _exec(self, args, redact=False):
         if redact:
             click.echo("Executing: [redacted]")
         else:
-            click.echo(f"Executing: {args}")
+            click.echo("Executing: {}".format(args))
         p = subprocess.run(args)
 
         if p.returncode != 0:
-            click.echo(f"return code: {p.returncode}")
+            click.echo("return code: {}".format(p.returncode))
             return False
 
         return True
