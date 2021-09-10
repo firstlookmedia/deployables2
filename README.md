@@ -33,6 +33,7 @@ The simplest way to install deployables2 in debian-based containers for CI:
 sudo apt-get update --allow-releaseinfo-change
 sudo apt-get install -y python3 python3-pip
 git clone https://github.com/firstlookmedia/deployables2.git /tmp/deployables2
+git checkout v0.1.0
 cd /tmp/deployables2
 pip3 install -r requirements.txt
 python3 setup.py install --user
