@@ -178,7 +178,7 @@ class Deployables2:
             return False
 
         # Wait for old revision to disappear
-        for _ in range(100):
+        for count in range(1000):
             res = client.describe_services(
                 cluster=self.env.get("DEPLOY_ECS_CLUSTER_NAME"),
                 services=[service],
@@ -197,7 +197,7 @@ class Deployables2:
                 click.echo("Success!")
                 return True
 
-            click.echo("Waiting for update ...")
+            click.echo("{}s Waiting for update ...".format(count * 5))
             time.sleep(5)
 
         click.echo("Error: Service update took too long")
