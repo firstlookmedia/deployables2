@@ -121,12 +121,25 @@ class Deployables2:
         client = self._aws_client("ecs", True)
 
         # Get family name
-        if self.env.get("DEPLOY_ECS_SUBFAMILY"):
-            family = "{}-{}".format(
-                self.env.get("DEPLOY_APP_NAME"), self.env.get("DEPLOY_ECS_SUBFAMILY")
-            )
+        if self.env.get("DEPLOY_ECS_FAMILIES"):
+            if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+                family = "{}-{}-{}".format(
+                    self.env.get("DEPLOY_APP_NAME"),
+                    self.env.get("DEPLOY_ECS_FAMILIES"),
+                    self.env.get("DEPLOY_ECS_SUBFAMILY"),
+                )
+            else:
+                family = "{}-{}".format(
+                    self.env.get("DEPLOY_APP_NAME"), self.env.get("DEPLOY_ECS_FAMILIES")
+                )
         else:
-            family = self.env.get("DEPLOY_APP_NAME")
+            if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+                family = "{}-{}".format(
+                    self.env.get("DEPLOY_APP_NAME"),
+                    self.env.get("DEPLOY_ECS_SUBFAMILY"),
+                )
+            else:
+                family = self.env.get("DEPLOY_APP_NAME")
 
         # Render the template
         if not os.path.exists(self.env.get("DEPLOY_TASK_DEF_TEMPLATE")):
