@@ -75,7 +75,7 @@ class Deployables2:
 
         target_tag = "{}/{}:{}".format(
             self.env.get("DEPLOY_ECR_HOST"),
-            self.env.get("DEPLOY_APP_NAME"),
+            self.env.get("DEPLOY_ECR_REPO"),
             self._get_target_image_tag(),
         )
 
@@ -143,7 +143,7 @@ class Deployables2:
         template_vars["DEPLOY_IMAGE_TAG"] = self._get_target_image_tag()
         template_vars["DEPLOY_IMAGE_NAME"] = "{}/{}:{}".format(
             self.env.get("DEPLOY_ECR_HOST"),
-            self.env.get("DEPLOY_APP_NAME"),
+            self.env.get("DEPLOY_ECR_REPO"),
             template_vars["DEPLOY_IMAGE_TAG"],
         )
 
