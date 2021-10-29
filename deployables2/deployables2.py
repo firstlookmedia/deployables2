@@ -120,9 +120,14 @@ class Deployables2:
 
         client = self._aws_client("ecs", True)
 
-        # Get family name
-        if self.env.get("DEPLOY_ECS_FAMILIES"):
-            if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+        # Get family names
+        # Where:
+        #   DEPLOY_APP_NAME is 'topic'
+        #   DEPLOY_ECS_SUBFAMILY is 'stargate'
+        #   DEPLOY_ECS_FAMILIES is '2'
+        # The family name would be 'topic-2-stargate',
+        if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+            if self.env.get("DEPLOY_ECS_FAMILIES"):
                 family = "{}-{}-{}".format(
                     self.env.get("DEPLOY_APP_NAME"),
                     self.env.get("DEPLOY_ECS_FAMILIES"),
@@ -133,13 +138,15 @@ class Deployables2:
                     self.env.get("DEPLOY_APP_NAME"), self.env.get("DEPLOY_ECS_FAMILIES")
                 )
         else:
-            if self.env.get("DEPLOY_ECS_SUBFAMILY"):
+            if self.env.get("DEPLOY_ECS_FAMILIES"):
                 family = "{}-{}".format(
                     self.env.get("DEPLOY_APP_NAME"),
                     self.env.get("DEPLOY_ECS_SUBFAMILY"),
                 )
             else:
                 family = self.env.get("DEPLOY_APP_NAME")
+
+        service = family
 
         # Render the template
         if not os.path.exists(self.env.get("DEPLOY_TASK_DEF_TEMPLATE")):
@@ -189,9 +196,9 @@ class Deployables2:
         revision_target = res["taskDefinition"]["taskDefinitionArn"]
 
         # Update the service
-        service = family
         click.echo("Updating service:")
         click.echo("- cluster: {}".format(self.env.get("DEPLOY_ECS_CLUSTER_NAME")))
+        click.echo("- family: {}".format(family))
         click.echo("- service: {}".format(service))
         click.echo("- taskDefinition: {}".format(revision_target))
         res = client.update_service(
