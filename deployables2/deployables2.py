@@ -135,13 +135,13 @@ class Deployables2:
                 )
             else:
                 family = "{}-{}".format(
-                    self.env.get("DEPLOY_APP_NAME"), self.env.get("DEPLOY_ECS_FAMILIES")
+                    self.env.get("DEPLOY_APP_NAME"), self.env.get("DEPLOY_ECS_SUBFAMILY")
                 )
         else:
             if self.env.get("DEPLOY_ECS_FAMILIES"):
                 family = "{}-{}".format(
                     self.env.get("DEPLOY_APP_NAME"),
-                    self.env.get("DEPLOY_ECS_SUBFAMILY"),
+                    self.env.get("DEPLOY_ECS_FAMILIES"),
                 )
             else:
                 family = self.env.get("DEPLOY_APP_NAME")
