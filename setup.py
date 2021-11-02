@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="deployables2",
-    version="0.1.5",
+    version="0.1.6",
     author="Micah Lee",
     author_email="micah.lee@firstlook.media",
     description="A basket of deploy scripts",

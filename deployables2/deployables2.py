@@ -118,7 +118,7 @@ class Deployables2:
         if not self._check_environment():
             return
 
-        client = self._aws_client("ecs", True)
+        client = sel${var.node_name}._aws_client("ecs", True)
 
         # Get family names
         # Where:
@@ -167,7 +167,9 @@ class Deployables2:
             template_vars["DEPLOY_IMAGE_TAG"],
         )
 
-        task_def = json.loads(template.render(template_vars))
+        rendered_template = template.render(template_vars)
+        print(f"Task definition:\n{rendered_template}\n")
+        task_def = json.loads(rendered_template)
 
         # Register the new task def
         if self.env.get("DEPLOY_ECS_FARGATE"):
