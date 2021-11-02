@@ -118,7 +118,7 @@ class Deployables2:
         if not self._check_environment():
             return
 
-        client = sel${var.node_name}._aws_client("ecs", True)
+        client = self._aws_client("ecs", True)
 
         # Get family names
         # Where:
