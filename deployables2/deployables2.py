@@ -72,7 +72,13 @@ class Deployables2:
         return True
 
     def ecs_deploy_image(self):
-        if not self._check_environment():
+        if not self._required_env([
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "DEPLOY_AWS_ACCOUNT",
+            "DEPLOY_ECR_ACCOUNT",
+            "DEPLOY_ECR_HOST",
+        ]):
             return
 
         target_tag = "{}/{}:{}".format(
@@ -117,7 +123,13 @@ class Deployables2:
         return True
 
     def ecs_update_service(self):
-        if not self._check_environment():
+        if not self._required_env([
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "DEPLOY_AWS_ACCOUNT",
+            "DEPLOY_ECR_ACCOUNT",
+            "DEPLOY_ECR_HOST",
+        ]):
             return
 
         client = self._aws_client("ecs", True)
@@ -344,17 +356,6 @@ class Deployables2:
                 return False
 
         return True
-
-    def _check_environment(self):
-        return self._required_env(
-            [
-                "AWS_ACCESS_KEY_ID",
-                "AWS_SECRET_ACCESS_KEY",
-                "DEPLOY_AWS_ACCOUNT",
-                "DEPLOY_ECR_ACCOUNT",
-                "DEPLOY_ECR_HOST",
-            ]
-        )
 
     def _aws_client(self, service, assume_role=False):
         if assume_role:
