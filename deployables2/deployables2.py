@@ -1,4 +1,5 @@
 import base64
+from botocore.errorfactory import ResourceNotFoundException
 import boto3
 import click
 import datetime
@@ -286,9 +287,13 @@ class Deployables2:
 
         lambda_client = self._aws_client("lambda", True)
 
-        existing_function = lambda_client.get_function(
-            FunctionName = function_name,
-        )
+        try:
+            existing_function = lambda_client.get_function(
+                FunctionName = function_name,
+            )
+        except ResourceNotFoundException:
+            existing_function = None
+
 
         if existing_function:
             function_arn = existing_function['Configuration']['FunctionArn']
