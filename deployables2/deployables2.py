@@ -1,5 +1,5 @@
 import base64
-from botocore.errorfactory import ResourceNotFoundException
+from botocore.exceptions import ResourceNotFoundException
 import boto3
 import click
 import datetime
@@ -294,8 +294,12 @@ class Deployables2:
         except ResourceNotFoundException:
             existing_function = None
 
+        if existing_function is None:
+            click.echo("Creating function")
+            click.echo("- name: {}".format(function_name))
 
-        if existing_function:
+            return False
+        else:
             function_arn = existing_function['Configuration']['FunctionArn']
             existing_revision = existing_function['Configuration']['RevisionId']
 
@@ -306,11 +310,6 @@ class Deployables2:
             # TODO update the existing function's configuration
             # TODO update the existing function's code
             # TODO publish the new version
-
-            return False
-        else:
-            click.echo("Creating function")
-            click.echo("- name: {}".format(function_name))
 
             return False
 
