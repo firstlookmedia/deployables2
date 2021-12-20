@@ -306,7 +306,7 @@ class Deployables2:
         function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
 
         try:
-            existing_function = lambda_client.get_function(
+            existing_function = lambda_client.get_function_configuration(
                 FunctionName = function_name,
             )
         except lambda_client.exceptions.ResourceNotFoundException:
@@ -348,13 +348,13 @@ class Deployables2:
             if new_function["State"] == "Pending":
                 # wait for the function to be created
                 attempt = 0
-                click.echo("Waiting for {} to be created".format(function_arn), nl = False)
+                click.echo("Waiting for {} to be created".format(function_arn))
                 while attempt < 1000 and new_function["State"] == "Pending":
                     attempt += 1
                     click.echo(".", nl=False)
 
-                    new_function = lambda_client.get_function(
-                        FunctionName = function_arn
+                    new_function = lambda_client.get_function_configuration(
+                        FunctionName = function_arn,
                     )
                 click.echo("")
 
@@ -369,8 +369,8 @@ class Deployables2:
 
             revision_to_publish = new_function['FunctionArn']
         else:
-            function_arn = existing_function['Configuration']['FunctionArn']
-            existing_revision = existing_function['Configuration']['RevisionId']
+            function_arn = existing_function['FunctionArn']
+            existing_revision = existing_function['RevisionId']
 
             click.echo("Updating function:")
             click.echo("- arn: {}".format(function_arn))
