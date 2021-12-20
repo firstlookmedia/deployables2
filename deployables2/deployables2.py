@@ -321,6 +321,11 @@ class Deployables2:
         ignore_patterns = [".git"]
 
         with tempfile.TemporaryDirectory() as archivable_directory:
+            click.echo("Copying source (minus any unnecessary assets) to a temporary directory:")
+            click.echo("- source: {}".format(source_directory))
+            click.echo("- temporary directory: {}".format(archivable_directory))
+            click.echo("- ignore patterns: {}".format(ignore_patterns))
+
             # create a temporary copy of the project source, ignoring unnecessary files/directories
             shutil.copytree(
                 source_directory,
@@ -328,13 +333,19 @@ class Deployables2:
                 ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
+            archive_name = os.path.join(
+                os.path.dirname(full_archive_path),
+                os.path.basename(full_archive_path),    # note: no extension
+            )
+            archive_format = "zip"
+            click.echo("Building an archive of the source:")
+            click.echo("- directory: {}".format(archivable_directory))
+            click.echo("- output: {}.{}".format(archive_name, archive_format))
+
             # create a .zip of the project source
             archive = shutil.make_archive(
-                os.path.join(
-                    os.path.dirname(full_archive_path),
-                    os.path.basename(full_archive_path),    # note: no extension
-                ),
-                "zip",
+                archive_name,
+                archive_format,
                 archivable_directory,
             )
 
