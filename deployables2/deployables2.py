@@ -271,17 +271,7 @@ class Deployables2:
         ]):
             return False
 
-        function_description = self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION")   # optional
         function_environment_template_path = self.env.get("DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE")
-        function_handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER")   # optional
-        function_memory_size = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE"))
-        function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
-        function_role ="arn:aws:iam::{}:role/{}".format(
-            self.env.get("DEPLOY_AWS_ACCOUNT"),
-            self.env.get("DEPLOY_LAMBDA_FUNCTION_ROLE"),
-        )
-        function_runtime = self.env.get("DEPLOY_LAMBDA_FUNCTION_RUNTIME")
-        function_timeout = self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")
 
         # render the environment template with the current env variables
         click.echo("Loading env template from {}".format(function_environment_template_path))
@@ -313,6 +303,7 @@ class Deployables2:
                 )
 
         lambda_client = self._aws_client("lambda", True)
+        function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
 
         try:
             existing_function = lambda_client.get_function(
@@ -321,33 +312,36 @@ class Deployables2:
         except lambda_client.exceptions.ResourceNotFoundException:
             existing_function = None
 
-        if existing_function is None:
-            click.echo("Creating function")
-            click.echo("- description: {}".format(function_description))
-            click.echo("- environment:\n{}".format(function_environment))
-            click.echo("- handler: {}".format(function_handler))
-            click.echo("- memory size: {}".format(function_memory_size))
-            click.echo("- name: {}".format(function_name))
-            click.echo("- package type: ZIP")
-            click.echo("- publish: false")
-            click.echo("- role: {}".format(function_role))
-            click.echo("- runtime: {}".format(function_runtime))
-            click.echo("- timeout: {}".format(function_timeout))
-            click.echo("")
+        function_config = dict(
+            Description = self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
+            Environment = function_environment,
+            FunctionName = function_name,
+            Handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER"),
+            MemorySize = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE")),
+            Role = "arn:aws:iam::{}:role/{}".format(
+                self.env.get("DEPLOY_AWS_ACCOUNT"),
+                self.env.get("DEPLOY_LAMBDA_FUNCTION_ROLE"),
+            ),
+            Runtime = self.env.get("DEPLOY_LAMBDA_FUNCTION_RUNTIME"),
+            Timeout = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")),
+        )
 
-            new_function = lambda_client.create_function(
+        for key, value in dict(function_config).items():
+            if value is None:
+                del function_config[key]
+
+        if existing_function is None:
+            new_function_config = function_config | dict(
                 Code = function_code,
-                Description = function_description,
-                Environment = function_environment,
-                FunctionName = function_name,
-                Handler = function_handler,
-                MemorySize = function_memory_size,
                 PackageType = "ZIP",
                 Publish = False,
-                Role = function_role,
-                Runtime = function_runtime,
-                Timeout = function_timeout,
             )
+
+            click.echo("Creating function:")
+            click.echo(new_function_config)
+            click.echo("")
+
+            new_function = lambda_client.create_function(new_function_config)
 
             click.echo("Created {} (revision {})".format(new_function['FunctionArn'], new_function['RevisionId']))
             click.echo("- state: {}".format(new_function['State']))
