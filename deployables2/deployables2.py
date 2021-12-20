@@ -315,38 +315,40 @@ class Deployables2:
         ]):
             return None
 
-        source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
+        full_source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
         full_archive_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH")
+        archive_basename = os.path.basename(full_archive_path)
 
         ignore_patterns = [".git"]
 
-        with tempfile.TemporaryDirectory() as archivable_directory:
+        with tempfile.TemporaryDirectory() as temp_directory:
             click.echo("Copying source (minus any unnecessary assets) to a temporary directory:")
-            click.echo("- source: {}".format(source_directory))
-            click.echo("- temporary directory: {}".format(archivable_directory))
+            click.echo("- source: {}".format(full_source_directory))
+            click.echo("- destination: {}".format(temp_directory))
             click.echo("- ignore patterns: {}".format(ignore_patterns))
 
             # create a temporary copy of the project source, ignoring unnecessary files/directories
             shutil.copytree(
-                source_directory,
-                archivable_directory,
+                full_source_directory,
+                temp_directory,
+                dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
             archive_name = os.path.join(
                 os.path.dirname(full_archive_path),
-                os.path.basename(full_archive_path),    # note: no extension
+                archive_basename,
             )
             archive_format = "zip"
             click.echo("Building an archive of the source:")
-            click.echo("- directory: {}".format(archivable_directory))
+            click.echo("- directory: {}".format(temp_directory))
             click.echo("- output: {}.{}".format(archive_name, archive_format))
 
             # create a .zip of the project source
             archive = shutil.make_archive(
                 archive_name,
                 archive_format,
-                archivable_directory,
+                temp_directory,
             )
 
         return archive
