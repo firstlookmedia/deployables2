@@ -382,8 +382,8 @@ class Deployables2:
             click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
             return False
 
+        versioned_function_arn = published_function['FunctionArn']
         if published_function["State"] == "Pending":
-            versioned_function_arn = published_function['FunctionArn']
             click.echo("Waiting for {} to be published".format(versioned_function_arn), nl = False)
             attempt = 0
             while attempt < 1000:
