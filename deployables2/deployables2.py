@@ -340,7 +340,7 @@ class Deployables2:
             click.echo("Creating function:")
             click.echo(
                 function_config | dict(
-                    PackageType = "ZIP",
+                    PackageType = "Zip",
                     Publish = False,
                 )
             )
