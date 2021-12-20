@@ -5,6 +5,7 @@ import datetime
 import jinja2
 import json
 import os
+import pathlib
 import shutil
 import subprocess
 import tempfile
@@ -317,7 +318,6 @@ class Deployables2:
 
         full_source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
         full_archive_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH")
-        archive_basename = os.path.basename(full_archive_path)
 
         ignore_patterns = [".git"]
 
@@ -335,10 +335,7 @@ class Deployables2:
                 ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
-            archive_name = os.path.join(
-                os.path.dirname(full_archive_path),
-                archive_basename,
-            )
+            archive_name = pathlib.Path(full_archive_path).with_suffix('')
             archive_format = "zip"
             click.echo("Building an archive of the source:")
             click.echo("- directory: {}".format(temp_directory))
