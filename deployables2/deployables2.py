@@ -316,7 +316,7 @@ class Deployables2:
             Description = self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
             Environment = function_environment,
             FunctionName = function_name,
-            Handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER"),
+            Handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER") or "index.handler",
             MemorySize = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE")),
             Role = "arn:aws:iam::{}:role/{}".format(
                 self.env.get("DEPLOY_AWS_ACCOUNT"),
@@ -338,17 +338,15 @@ class Deployables2:
             )
 
             click.echo("Creating function:")
-            click.echo(new_function_config)
+            click.echo(json.dumps(new_function_config, indent=2))
             click.echo("")
 
             new_function_config['Code'] = function_code
 
             new_function = lambda_client.create_function(**new_function_config)
 
-            click.echo("Created {} (revision {})".format(new_function['FunctionArn'], new_function['RevisionId']))
-            click.echo("- state: {}".format(new_function['State']))
-            click.echo("- state reason: {}".format(new_function['StateReason']))
-            click.echo("- state reason code: {}".format(new_function['StateReasonCode']))
+            click.echo("Created function:")
+            click.echo(json.dumps(new_function, indent=2))
             click.echo("")
         else:
             function_arn = existing_function['Configuration']['FunctionArn']
