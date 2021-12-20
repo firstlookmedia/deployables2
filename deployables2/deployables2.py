@@ -284,11 +284,16 @@ class Deployables2:
         function_timeout = self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")
 
         # render the environment template with the current env variables
-        with open(function_environment_template_path, "rb") as f:
-            function_environment_template = jinja2.Template(f.read())
+        click.echo("Loading env template from {}".format(function_environment_template_path))
+        with open(function_environment_template_path, "r") as f:
+            data = f.read()
+            click.echo(data)
+            function_environment_template = jinja2.Template(data)
 
         function_environment_variables = self.env.copy()
-        function_environment = function_environment_template.render(function_environment_variables)
+        function_environment_json = function_environment_template.render(function_environment_variables)
+        click.echo("Rendered env file:\n{}".format(function_environment_json))
+        function_environment = json.loads(function_environment_json)
 
         # TODO check if DEPLOY_LAMBDA_ZIP_FULLPATH refers to a pre-built .zip and use it as is, if so
         archive_path = self._create_lambda_archive()
