@@ -331,10 +331,11 @@ class Deployables2:
                 "Publish": False,
             }
 
-            click.echo("Creating new {} function...".format(function_name))
+            click.echo("Creating new {} function...".format(function_name), nl = False)
             new_function = lambda_client.create_function(**new_function_config)
 
             if new_function["State"] == "Failed":
+                click.echo("")
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
@@ -343,7 +344,6 @@ class Deployables2:
             if new_function["State"] == "Pending":
                 # wait for the function to be created
                 attempt = 0
-                click.echo("Waiting for {} to be created".format(function_arn), nl = False)
                 while attempt < 1000:
                     attempt += 1
                     click.echo(".", nl=False)
@@ -362,6 +362,13 @@ class Deployables2:
                     click.echo("Lambda took too long to create the function")
                     return False
 
+            if new_function["State"] == "Failed":
+                click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
+                return False
+
+            click.echo("Created {} (state: {})".format(function_arn, new_function["State"]))
+            click.echo("")
+
             revision_to_publish = new_function['RevisionId']
         else:
             # TODO update the existing function's configuration
@@ -371,20 +378,19 @@ class Deployables2:
 
             return False    # TODO remove
 
-        click.echo("Publishing new version...")
+        click.echo("Publishing new version...", nl = False)
         published_function = lambda_client.publish_version(
             FunctionName = function_name,
             RevisionId = revision_to_publish
         )
-        click.echo("")
 
         if published_function["State"] == "Failed":
+            click.echo("")
             click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
             return False
 
         versioned_function_arn = published_function['FunctionArn']
         if published_function["State"] == "Pending":
-            click.echo("Waiting for {} to be published".format(versioned_function_arn), nl = False)
             attempt = 0
             while attempt < 1000:
                 attempt += 1
@@ -441,6 +447,7 @@ class Deployables2:
             )
 
         click.echo("Created {}".format(full_archive_path))
+        click.echo("")
 
         return archive
 
