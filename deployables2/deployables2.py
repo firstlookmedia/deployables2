@@ -271,7 +271,24 @@ class Deployables2:
         ]):
             return False
 
+        function_description = self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION")   # optional
+        function_environment_template_path = self.env.get("DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE")
+        function_handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER")   # optional
+        function_memory_size = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE"))
         function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
+        function_role ="arn:aws:iam::{}:role/{}".format(
+            self.env.get("DEPLOY_AWS_ACCOUNT"),
+            self.env.get("DEPLOY_LAMBDA_FUNCTION_ROLE"),
+        )
+        function_runtime = self.env.get("DEPLOY_LAMBDA_FUNCTION_RUNTIME")
+        function_timeout = self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")
+
+        # render the environment template with the current env variables
+        with open(function_environment_template_path, "rb") as f:
+            function_environment_template = jinja2.Template(f.read())
+
+        function_environment_variables = self.env.copy()
+        function_environment = function_environment_template.render(function_environment_variables)
 
         # TODO check if DEPLOY_LAMBDA_ZIP_FULLPATH refers to a pre-built .zip and use it as is, if so
         archive_path = self._create_lambda_archive()
@@ -280,9 +297,15 @@ class Deployables2:
 
         archive_size = os.path.getsize(archive_path)
         if archive_size >= 50_000_000:
-            # TODO upload the archive to S3 and use that instead of erroring out
+            # TODO upload the archive to S3
+            # TODO function_code = dict(S3Bucket="...", S3Key="...", S3ObjectVersion="...")
             click.echo("Error: archive is {} bytes, which is too large to upload directly (max: 50MB)".format(archive_size))
             return False
+        else:
+            with open(archive_path, "rb") as f:
+                function_code = dict(
+                    ZipFile = f.read(),
+                )
 
         lambda_client = self._aws_client("lambda", True)
 
@@ -295,9 +318,37 @@ class Deployables2:
 
         if existing_function is None:
             click.echo("Creating function")
+            click.echo("- description: {}".format(function_description))
+            click.echo("- environment:\n{}".format(function_environment))
+            click.echo("- handler: {}".format(function_handler))
+            click.echo("- memory size: {}".format(function_memory_size))
             click.echo("- name: {}".format(function_name))
+            click.echo("- package type: ZIP")
+            click.echo("- publish: false")
+            click.echo("- role: {}".format(function_role))
+            click.echo("- runtime: {}".format(function_runtime))
+            click.echo("- timeout: {}".format(function_timeout))
+            click.echo("")
 
-            return False
+            new_function = lambda_client.create_function(
+                Code = function_code,
+                Description = function_description,
+                Environment = function_environment,
+                FunctionName = function_name,
+                Handler = function_handler,
+                MemorySize = function_memory_size,
+                PackageType = "ZIP",
+                Publish = False,
+                Role = function_role,
+                Runtime = function_runtime,
+                Timeout = function_timeout,
+            )
+
+            click.echo("Created {} (revision {})".format(new_function['FunctionArn'], new_function['RevisionId']))
+            click.echo("- state: {}".format(new_function['State']))
+            click.echo("- state reason: {}".format(new_function['StateReason']))
+            click.echo("- state reason code: {}".format(new_function['StateReasonCode']))
+            click.echo("")
         else:
             function_arn = existing_function['Configuration']['FunctionArn']
             existing_revision = existing_function['Configuration']['RevisionId']
@@ -308,9 +359,10 @@ class Deployables2:
 
             # TODO update the existing function's configuration
             # TODO update the existing function's code
-            # TODO publish the new version
 
-            return False
+        # TODO publish the new version
+
+        return False
 
     def _create_lambda_archive(self):
         if not self._required_env([
