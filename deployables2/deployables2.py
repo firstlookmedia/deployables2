@@ -312,36 +312,36 @@ class Deployables2:
         except lambda_client.exceptions.ResourceNotFoundException:
             existing_function = None
 
-        function_config = dict(
-            Description = self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
-            Environment = function_environment,
-            FunctionName = function_name,
-            Handler = self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER") or "index.handler",
-            MemorySize = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE")),
-            Role = "arn:aws:iam::{}:role/{}".format(
+        function_config = {
+            "description": self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
+            "environment": function_environment,
+            "function_name": function_name,
+            "handler": self.env.get("DEPLOY_LAMBDA_FUNCTION_HANDLER") or "index.handler",
+            "memory_size": int(self.env.get("DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE")),
+            "role": "arn:aws:iam::{}:role/{}".format(
                 self.env.get("DEPLOY_AWS_ACCOUNT"),
                 self.env.get("DEPLOY_LAMBDA_FUNCTION_ROLE"),
             ),
-            Runtime = self.env.get("DEPLOY_LAMBDA_FUNCTION_RUNTIME"),
-            Timeout = int(self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")),
-        )
+            "runmtime": self.env.get("DEPLOY_LAMBDA_FUNCTION_RUNTIME"),
+            "timeout": int(self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")),
+        }
 
         for key, value in dict(function_config).items():
             if value is None:
                 del function_config[key]
 
         if existing_function is None:
-            new_function_config = function_config | dict(
-                Code = "[omitted]", # omitted temporarily to prevent the whole zip from logging out
-                PackageType = "Zip",
-                Publish = False,
-            )
+            new_function_config = function_config | {
+                "code": "[omitted]", # omitted temporarily to prevent the whole zip from logging out
+                "package_type": "Zip",
+                "publish": False,
+            }
 
             click.echo("Creating function:")
             click.echo(json.dumps(new_function_config, indent=2))
             click.echo("")
 
-            new_function_config['Code'] = function_code
+            new_function_config.code = function_code
 
             new_function = lambda_client.create_function(**new_function_config)
 
