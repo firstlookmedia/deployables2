@@ -1,5 +1,5 @@
 import base64
-from botocore.exceptions import ResourceNotFoundException
+import botocore
 import boto3
 import click
 import datetime
@@ -291,7 +291,7 @@ class Deployables2:
             existing_function = lambda_client.get_function(
                 FunctionName = function_name,
             )
-        except ResourceNotFoundException:
+        except botocore.exceptions.ResourceNotFoundException as error:
             existing_function = None
 
         if existing_function is None:
