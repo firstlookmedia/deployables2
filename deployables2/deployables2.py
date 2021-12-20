@@ -343,12 +343,30 @@ class Deployables2:
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
+            function_arn = new_function['FunctionArn']
+
+            if new_function["State"] == "Pending":
+                # wait for the function to be created
+                attempt = 0
+                click.echo("Waiting for {} to be created".format(function_arn), nl = False)
+                while attempt < 1000 and new_function["State"] == "Pending":
+                    attempt += 1
+                    click.echo(".", nl=False)
+
+                    new_function = lambda_client.get_function(
+                        FunctionName = function_arn
+                    )
+                click.echo("")
+
+                if new_function["State"] == "Pending":
+                    click.echo("Lambda took too long to create the function")
+                    return False
+
             click.echo("Created function:")
             click.echo("- arn: {}".format(new_function['FunctionArn']))
             click.echo("- revision: {}".format(new_function['FunctionArn']))
             click.echo("- state: {}".format(new_function['State']))
 
-            function_arn = new_function['FunctionArn']
             revision_to_publish = new_function['FunctionArn']
         else:
             function_arn = existing_function['Configuration']['FunctionArn']
