@@ -34,5 +34,13 @@ def ecs_update_service():
         sys.exit(1)
 
 
+@main.command()
+def lambda_deploy():
+    """Deploy a new Lambda function version"""
+    d = Deployables2()
+    if not d.lambda_deploy():
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()

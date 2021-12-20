@@ -1,12 +1,14 @@
-import os
-import subprocess
-import datetime
 import base64
-import json
-import time
-import click
 import boto3
+import click
+import datetime
 import jinja2
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import time
 
 
 class Deployables2:
@@ -240,6 +242,91 @@ class Deployables2:
 
         click.echo("Error: Service update took too long")
         return False
+
+    def lambda_deploy(self):
+        if not self._check_environment():
+            return False
+
+        if not self._required_env([
+            "DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE",
+            "DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE",
+            "DEPLOY_LAMBDA_FUNCTION_NAME",
+            "DEPLOY_LAMBDA_FUNCTION_ROLE",
+            "DEPLOY_LAMBDA_FUNCTION_RUNTIME",
+            "DEPLOY_LAMBDA_FUNCTION_TIMEOUT",
+            "DEPLOY_LAMBDA_ZIP_VERSION",
+        ]):
+            return False
+
+        function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
+
+        # TODO check if DEPLOY_LAMBDA_ZIP_FULLPATH refers to a pre-built .zip and use it as is, if so
+        archive_path = self._create_lambda_archive()
+        if not archive_path:
+            return False
+
+        archive_size = os.path.getsize(archive_path)
+        if archive_size >= 50_000_000:
+            # TODO upload the archive to S3 and use that instead of erroring out
+            click.echo("Error: archive is {} bytes, which is too large to upload directly (max: 50MB)".format(archive_size))
+            return False
+
+        lambda_client = self._aws_client("lambda", True)
+
+        existing_function = lambda_client.get_function(
+            FunctionName = function_name,
+        )
+
+        if existing_function:
+            function_arn = existing_function['Configuration']['FunctionArn']
+            existing_revision = existing_function['Configuration']['RevisionId']
+
+            click.echo("Updating function:")
+            click.echo("- arn: {}".format(function_arn))
+            click.echo("- existingRevision: {}".format(existing_revision))
+
+            # TODO update the existing function's configuration
+            # TODO update the existing function's code
+            # TODO publish the new version
+
+            return False
+        else:
+            click.echo("Creating function")
+            click.echo("- name: {}".format(function_name))
+
+            return False
+
+    def _create_lambda_archive(self):
+        if not self._required_env([
+            "DEPLOY_LAMBDA_SOURCE_DIR",
+            "DEPLOY_LAMBDA_ZIP_FULLPATH",
+        ]):
+            return None
+
+        source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
+        full_archive_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH")
+
+        ignore_patterns = [".git"]
+
+        with tempfile.TemporaryDirectory() as archivable_directory:
+            # create a temporary copy of the project source, ignoring unnecessary files/directories
+            shutil.copytree(
+                source_directory,
+                archivable_directory,
+                ignore=shutil.ignore_patterns(ignore_patterns),
+            )
+
+            # create a .zip of the project source
+            archive = shutil.make_archive(
+                os.path.join(
+                    os.path.dirname(full_archive_path),
+                    os.path.basename(full_archive_path),    # note: no extension
+                ),
+                "zip",
+                archivable_directory,
+            )
+
+        return archive
 
     def _load_vars_from_env(self, defaults):
         self.env = defaults.copy()
