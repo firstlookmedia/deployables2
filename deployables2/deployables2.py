@@ -349,13 +349,18 @@ class Deployables2:
                 # wait for the function to be created
                 attempt = 0
                 click.echo("Waiting for {} to be created".format(function_arn))
-                while attempt < 1000 and new_function["State"] == "Pending":
+                while attempt < 1000:
                     attempt += 1
-                    click.echo(".", nl=False)
 
                     new_function = lambda_client.get_function_configuration(
                         FunctionName = function_arn,
                     )
+
+                    if new_function["State"] == "Pending":
+                        time.sleep(5)
+                        click.echo(".", nl=False)
+                    else:
+                        break
                 click.echo("")
 
                 if new_function["State"] == "Pending":
@@ -364,10 +369,10 @@ class Deployables2:
 
             click.echo("Created function:")
             click.echo("- arn: {}".format(new_function['FunctionArn']))
-            click.echo("- revision: {}".format(new_function['FunctionArn']))
+            click.echo("- revision: {}".format(new_function['RevisionId']))
             click.echo("- state: {}".format(new_function['State']))
 
-            revision_to_publish = new_function['FunctionArn']
+            revision_to_publish = new_function['RevisionId']
         else:
             function_arn = existing_function['FunctionArn']
             existing_revision = existing_function['RevisionId']
