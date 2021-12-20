@@ -332,19 +332,16 @@ class Deployables2:
 
         if existing_function is None:
             new_function_config = function_config | dict(
-                Code = function_code,
+                Code = "[omitted]",
                 PackageType = "ZIP",
                 Publish = False,
             )
 
             click.echo("Creating function:")
-            click.echo(
-                function_config | dict(
-                    PackageType = "Zip",
-                    Publish = False,
-                )
-            )
+            click.echo(new_function_config)
             click.echo("")
+
+            function_config['Code'] = function_code
 
             new_function = lambda_client.create_function(**new_function_config)
 
