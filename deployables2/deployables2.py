@@ -332,22 +332,24 @@ class Deployables2:
 
         if existing_function is None:
             new_function_config = function_config | {
-                "Code": "[omitted]", # omitted temporarily to prevent the whole zip from logging out
+                "Code": function_code,
                 "PackageType": "Zip",
                 "Publish": False,
             }
 
-            click.echo("Creating function:")
-            click.echo(json.dumps(new_function_config, indent=2))
-            click.echo("")
-
-            new_function_config["Code"] = function_code
-
             new_function = lambda_client.create_function(**new_function_config)
 
+            if new_function["State"] == "Failed":
+                click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
+                return False
+
             click.echo("Created function:")
-            click.echo(json.dumps(new_function, indent=2))
-            click.echo("")
+            click.echo("- arn: {}".format(new_function['FunctionArn']))
+            click.echo("- revision: {}".format(new_function['FunctionArn']))
+            click.echo("- state: {}".format(new_function['State']))
+
+            function_arn = new_function['FunctionArn']
+            revision_to_publish = new_function['FunctionArn']
         else:
             function_arn = existing_function['Configuration']['FunctionArn']
             existing_revision = existing_function['Configuration']['RevisionId']
@@ -359,9 +361,22 @@ class Deployables2:
             # TODO update the existing function's configuration
             # TODO update the existing function's code
 
-        # TODO publish the new version
+            revision_to_publish = None # TODO
 
-        return False
+            return False    # TODO remove
+
+        click.echo("Publishing version:")
+        click.echo("- arn: {}".format(function_arn))
+        click.echo("- revision: {}".format(revision_to_publish))
+
+        published_function = lambda_client.publish_version(
+            FunctionName = function_arn,
+            RevisionId = revision_to_publish
+        )
+
+        print(json.dumps(published_function))
+
+        return True
 
     def _create_lambda_archive(self):
         if not self._required_env([
