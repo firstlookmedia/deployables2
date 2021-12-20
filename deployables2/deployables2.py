@@ -325,7 +325,7 @@ class Deployables2:
             shutil.copytree(
                 source_directory,
                 archivable_directory,
-                ignore=shutil.ignore_patterns(ignore_patterns),
+                ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
             # create a .zip of the project source
