@@ -338,10 +338,15 @@ class Deployables2:
             )
 
             click.echo("Creating function:")
-            click.echo(new_function_config)
+            click.echo(
+                function_config | dict(
+                    PackageType = "ZIP",
+                    Publish = False,
+                )
+            )
             click.echo("")
 
-            new_function = lambda_client.create_function(new_function_config)
+            new_function = lambda_client.create_function(**new_function_config)
 
             click.echo("Created {} (revision {})".format(new_function['FunctionArn'], new_function['RevisionId']))
             click.echo("- state: {}".format(new_function['State']))
