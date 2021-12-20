@@ -256,10 +256,10 @@ class Deployables2:
         return False
 
     def lambda_deploy(self):
-        if not self._check_environment():
-            return False
-
         if not self._required_env([
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "DEPLOY_AWS_ACCOUNT",
             "DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE",
             "DEPLOY_LAMBDA_FUNCTION_MEMORY_SIZE",
             "DEPLOY_LAMBDA_FUNCTION_NAME",
