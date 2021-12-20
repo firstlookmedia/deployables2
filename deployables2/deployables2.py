@@ -332,8 +332,8 @@ class Deployables2:
 
         if existing_function is None:
             new_function_config = function_config | dict(
-                Code = "[omitted]",
-                PackageType = "ZIP",
+                Code = "[omitted]", # omitted temporarily to prevent the whole zip from logging out
+                PackageType = "Zip",
                 Publish = False,
             )
 
@@ -341,7 +341,7 @@ class Deployables2:
             click.echo(new_function_config)
             click.echo("")
 
-            function_config['Code'] = function_code
+            new_function_config['Code'] = function_code
 
             new_function = lambda_client.create_function(**new_function_config)
 
