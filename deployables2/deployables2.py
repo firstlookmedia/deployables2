@@ -271,19 +271,13 @@ class Deployables2:
         ]):
             return False
 
-        function_environment_template_path = self.env.get("DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE")
-
         # render the environment template with the current env variables
-        click.echo("Loading env template from {}".format(function_environment_template_path))
-        with open(function_environment_template_path, "r") as f:
-            data = f.read()
-            click.echo(data)
-            function_environment_template = jinja2.Template(data)
-
+        with open(self.env.get("DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE"), "r") as f:
+            function_environment_template = jinja2.Template(f.read())
         function_environment_variables = self.env.copy()
-        function_environment_json = function_environment_template.render(function_environment_variables)
-        click.echo("Rendered env file:\n{}".format(function_environment_json))
-        function_environment = json.loads(function_environment_json)
+        function_environment = json.loads(
+            function_environment_template.render(function_environment_variables)
+        )
 
         # TODO check if DEPLOY_LAMBDA_ZIP_FULLPATH refers to a pre-built .zip and use it as is, if so
         archive_path = self._create_lambda_archive()
@@ -337,6 +331,7 @@ class Deployables2:
                 "Publish": False,
             }
 
+            click.echo("Creating new {} function...".format(function_name))
             new_function = lambda_client.create_function(**new_function_config)
 
             if new_function["State"] == "Failed":
@@ -348,9 +343,10 @@ class Deployables2:
             if new_function["State"] == "Pending":
                 # wait for the function to be created
                 attempt = 0
-                click.echo("Waiting for {} to be created".format(function_arn))
+                click.echo("Waiting for {} to be created".format(function_arn), nl = False)
                 while attempt < 1000:
                     attempt += 1
+                    click.echo(".", nl=False)
 
                     new_function = lambda_client.get_function_configuration(
                         FunctionName = function_arn,
@@ -358,7 +354,6 @@ class Deployables2:
 
                     if new_function["State"] == "Pending":
                         time.sleep(5)
-                        click.echo(".", nl=False)
                     else:
                         break
                 click.echo("")
@@ -367,20 +362,8 @@ class Deployables2:
                     click.echo("Lambda took too long to create the function")
                     return False
 
-            click.echo("Created function:")
-            click.echo("- arn: {}".format(new_function['FunctionArn']))
-            click.echo("- revision: {}".format(new_function['RevisionId']))
-            click.echo("- state: {}".format(new_function['State']))
-
             revision_to_publish = new_function['RevisionId']
         else:
-            function_arn = existing_function['FunctionArn']
-            existing_revision = existing_function['RevisionId']
-
-            click.echo("Updating function:")
-            click.echo("- arn: {}".format(function_arn))
-            click.echo("- existingRevision: {}".format(existing_revision))
-
             # TODO update the existing function's configuration
             # TODO update the existing function's code
 
@@ -388,17 +371,40 @@ class Deployables2:
 
             return False    # TODO remove
 
-        click.echo("Publishing version:")
-        click.echo("- arn: {}".format(function_arn))
-        click.echo("- revision: {}".format(revision_to_publish))
-
+        click.echo("Publishing new version...")
         published_function = lambda_client.publish_version(
-            FunctionName = function_arn,
+            FunctionName = function_name,
             RevisionId = revision_to_publish
         )
+        click.echo("")
 
-        print(json.dumps(published_function))
+        if published_function["State"] == "Failed":
+            click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
+            return False
 
+        if published_function["State"] == "Pending":
+            versioned_function_arn = published_function['FunctionArn']
+            click.echo("Waiting for {} to be published".format(versioned_function_arn), nl = False)
+            attempt = 0
+            while attempt < 1000:
+                attempt += 1
+                click.echo(".", nl=False)
+
+                published_function = lambda_client.get_function_configuration(
+                    FunctionName = versioned_function_arn,
+                )
+
+                if published_function["State"] == "Pending":
+                    time.sleep(5)
+                else:
+                    break
+            click.echo("")
+
+            if published_function["State"] == "Pending":
+                click.echo("Lambda took too long to publish the new version")
+                return False
+
+        click.echo("Published {} (state: {})".format(versioned_function_arn, published_function["State"]))
         return True
 
     def _create_lambda_archive(self):
@@ -411,14 +417,14 @@ class Deployables2:
         full_source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
         full_archive_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH")
 
+        archive_format = "zip"
+        archive_name = pathlib.Path(full_archive_path).with_suffix('')
+
+        click.echo("Creating {} archive of {} ...".format(archive_format, full_source_directory))
+
         ignore_patterns = [".git"]
 
         with tempfile.TemporaryDirectory() as temp_directory:
-            click.echo("Copying source (minus any unnecessary assets) to a temporary directory:")
-            click.echo("- source: {}".format(full_source_directory))
-            click.echo("- destination: {}".format(temp_directory))
-            click.echo("- ignore patterns: {}".format(ignore_patterns))
-
             # create a temporary copy of the project source, ignoring unnecessary files/directories
             shutil.copytree(
                 full_source_directory,
@@ -427,18 +433,14 @@ class Deployables2:
                 ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
-            archive_name = pathlib.Path(full_archive_path).with_suffix('')
-            archive_format = "zip"
-            click.echo("Building an archive of the source:")
-            click.echo("- directory: {}".format(temp_directory))
-            click.echo("- output: {}.{}".format(archive_name, archive_format))
-
             # create a .zip of the project source
             archive = shutil.make_archive(
                 archive_name,
                 archive_format,
                 temp_directory,
             )
+
+        click.echo("Created {}".format(full_archive_path))
 
         return archive
 
