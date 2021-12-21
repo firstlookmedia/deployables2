@@ -332,6 +332,7 @@ class Deployables2:
 
             publish_config = {
                 "CodeSha256": new_function["CodeSha256"],
+                "Description": tag,
                 "FunctionName": function_name,
                 "RevisionId": new_function["RevisionId"],
             }
