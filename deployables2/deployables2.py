@@ -365,12 +365,40 @@ class Deployables2:
 
             revision_to_publish = new_function['RevisionId']
         else:
-            # TODO update the existing function's configuration
-            # TODO update the existing function's code
+            existing_revision = existing_function['RevisionId']
 
-            revision_to_publish = None # TODO
+            updated_function_config = function_config | {
+                "RevisionId": existing_revision
+            }
 
-            return False    # TODO remove
+            click.echo("Updating configuration for {}...".format(function_name))
+            updated_function = lambda_client.update_function_configuration(**updated_function_config)
+            if updated_function["State"] == "Failed":
+                click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
+                return False
+            click.echo("Updated the function's configuration (state: {})".format(updated_function["State"]))
+            click.echo("")
+
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
+
+            click.echo("Updating code for {}...".format(function_name))
+            updated_function_code = function_code | {
+                "FunctionName": function_name,
+                "Publish": False,
+                "RevisionId": existing_revision,
+            }
+            updated_function = lambda_client.update_function_code(**updated_function_code)
+            if updated_function["State"] == "Failed":
+                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
+                return False
+            click.echo("Updated the function's code (state: {})".format(updated_function["State"]))
+            click.echo("")
+
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
+
+            revision_to_publish = updated_function["RevisionId"]
 
         click.echo("Publishing new version...", nl = False)
         published_function = lambda_client.publish_version(
