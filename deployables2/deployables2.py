@@ -400,13 +400,11 @@ class Deployables2:
         click.echo("")
 
         account_settings = lambda_client.get_account_settings()
-        click.echo(json.dumps(account_settings, indent = 2))
-
-        max_archive_bytes = 0    # TODO use the actual limit from the account settings
+        max_archive_bytes = account_settings["AccountLimit"]["CodeSizeZipped"]
 
         archive_size = os.path.getsize(output_path)
         if archive_size >= max_archive_bytes:
-            click.echo("Archive is too large to upload directly (Lambda has a {}MB limit)".format(max_archive_bytes // 1_000_000))
+            click.echo("Archive is too large to upload directly (limit: {}B)".format(max_archive_bytes))
 
             # TODO upload large archives to S3 and then return {"S3Bucket": ..., "S3Key": ..., "S3ObjectVersion: ..."}
 
