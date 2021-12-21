@@ -335,35 +335,24 @@ class Deployables2:
             new_function = lambda_client.create_function(**new_function_config)
             function_arn = new_function['FunctionArn']
 
-            if new_function["State"] == "Pending":
-                # wait for the function to be created
-                attempt = 0
-                while attempt < 1000:
-                    attempt += 1
-                    click.echo(".", nl=False)
+            [new_function, error] = self._poll_for_update(
+                "Waiting for {} to be fully created...".format(function_arn),
+                lambda: lambda_client.get_function_configuration(FunctionName = function_arn),
+                lambda response: response["State"] != "Pending",
+            )
 
-                    new_function = lambda_client.get_function_configuration(
-                        FunctionName = function_arn,
-                    )
-
-                    if new_function["State"] == "Pending":
-                        time.sleep(5)
-                    else:
-                        break
-                click.echo("")
-
-                if new_function["State"] == "Pending":
-                    click.echo("Lambda took too long to create the function")
-                    return False
+            if error:
+                click.echo("Lambda took too long to create the function")
+                return False
 
             if new_function["State"] == "Failed":
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
-            click.echo("Created {} (state: {})".format(function_arn, new_function["State"]))
-            click.echo("")
-
             revision_to_publish = new_function['RevisionId']
+
+            click.echo("Created {} function (state: {}, revision: {})".format(function_arn, new_function["State"], revision_to_publish))
+            click.echo("")
         else:
             existing_revision = existing_function['RevisionId']
 
@@ -376,7 +365,21 @@ class Deployables2:
             if updated_function["State"] == "Failed":
                 click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
                 return False
-            click.echo("Updated the function's configuration (state: {})".format(updated_function["State"]))
+
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
+
+            [updated_function, error] = self._poll_for_update(
+                "Checking for updated configuration for {}...".format(function_name),
+                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+                lambda response: response["Status"] != "Pending",
+            )
+
+            if error:
+                click.echo("Lambda took too long to update the function's configuration")
+                return False
+
+            click.echo("Updated configuration for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
             click.echo("")
 
             # TODO remove
@@ -392,7 +395,21 @@ class Deployables2:
             if updated_function["State"] == "Failed":
                 click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
                 return False
-            click.echo("Updated the function's code (state: {})".format(updated_function["State"]))
+
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
+
+            [updated_function, error] = self._poll_for_update(
+                "Checking for updated configuration for {}...".format(function_name),
+                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+                lambda response: response["Status"] != "Pending",
+            )
+
+            if error:
+                click.echo("Lambda took too long to update the function's code")
+                return False
+
+            click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
             click.echo("")
 
             # TODO remove
@@ -400,39 +417,28 @@ class Deployables2:
 
             revision_to_publish = updated_function["RevisionId"]
 
-        click.echo("Publishing new version...", nl = False)
+        click.echo("Publishing new version of {} (revision: {})...".format(function_name, revision_to_publish))
         published_function = lambda_client.publish_version(
             FunctionName = function_name,
             RevisionId = revision_to_publish
         )
         versioned_function_arn = published_function['FunctionArn']
 
-        if published_function["State"] == "Pending":
-            attempt = 0
-            while attempt < 1000:
-                attempt += 1
-                click.echo(".", nl=False)
+        [published_function, error] = self._poll_for_update(
+            "Checking for updated configuration for {}...".format(function_name),
+            lambda: lambda_client.get_function_configuration(FunctionName = versioned_function_arn),
+            lambda response: response["Status"] != "Pending",
+        )
 
-                published_function = lambda_client.get_function_configuration(
-                    FunctionName = versioned_function_arn,
-                )
-
-                if published_function["State"] == "Pending":
-                    time.sleep(5)
-                else:
-                    break
-
-            if published_function["State"] == "Pending":
-                click.echo("")
-                click.echo("Lambda took too long to publish the new version")
-                return False
-        click.echo("")
+        if error:
+            click.echo("Lambda took too long to publish the new version")
+            return False
 
         if published_function["State"] == "Failed":
             click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
             return False
 
-        click.echo("Published {} (state: {})".format(versioned_function_arn, published_function["State"]))
+        click.echo("Published {} (state: {}, revision: {})".format(versioned_function_arn, published_function["State"], published_function["RevisionId"]))
         return True
 
     def _create_lambda_archive(self):
@@ -544,3 +550,21 @@ class Deployables2:
             return False
 
         return True
+
+    def _poll_for_update(self, start_message, request, is_complete, max_attempts=1000, delay_between_requests=5):
+        click.echo(start_message, nl=False)
+
+        attempt = 1
+        while attempt < max_attempts:
+            response = request()
+
+            if is_complete(response):
+                click.echo("")
+                return [response, None]
+
+            attempt += 1
+            click.echo(".", nl=False)
+            time.sleep(delay_between_requests)
+
+        click.echo("")
+        [None, "too many attempts"]
