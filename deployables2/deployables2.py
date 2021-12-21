@@ -389,12 +389,13 @@ class Deployables2:
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
 
+            click.echo("Existing code hash: {}".format(updated_function["CodeSha256"]))
+            click.echo("  Latest code hash: {}".format(function_code_sha256))
             if updated_function["CodeSha256"] == function_code_sha256:
                 click.echo("No code update necessary")
-                click.echo("- live code hash: {}".format(updated_function["CodeSha256"]))
-                click.echo("- new code hash:  {}".format(function_code_sha256))
             else:
                 click.echo("Updating code for {}...".format(function_name))
+
                 updated_function_code = function_code | {
                     "FunctionName": function_name,
                     "Publish": False,
