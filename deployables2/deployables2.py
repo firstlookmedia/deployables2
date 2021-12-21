@@ -11,7 +11,6 @@ import subprocess
 import tempfile
 import time
 
-
 class Deployables2:
     def __init__(self):
         self._load_vars_from_env(
@@ -267,9 +266,15 @@ class Deployables2:
             "DEPLOY_LAMBDA_FUNCTION_ROLE",
             "DEPLOY_LAMBDA_FUNCTION_RUNTIME",
             "DEPLOY_LAMBDA_FUNCTION_TIMEOUT",
+            "DEPLOY_LAMBDA_SOURCE_DIR",
+            "DEPLOY_LAMBDA_S3_BUCKET",
+            "DEPLOY_LAMBDA_ZIP_FULLPATH",
             "DEPLOY_LAMBDA_ZIP_VERSION",
         ]):
             return False
+
+        function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
+        tag = self.env.get("DEPLOY_LAMBDA_ZIP_VERSION")
 
         # render the environment template with the current env variables
         with open(self.env.get("DEPLOY_LAMBDA_FUNCTION_ENV_TEMPLATE"), "r") as f:
@@ -279,23 +284,17 @@ class Deployables2:
             function_environment_template.render(function_environment_variables)
         )
 
-        # TODO check if DEPLOY_LAMBDA_ZIP_FULLPATH refers to a pre-built .zip and use it as is, if so
-        archive_path = self._lambda_create_archive()
-        if not archive_path:
-            return False
-
-        archive_size = os.path.getsize(archive_path)
-        if archive_size >= 50_000_000:
-            # TODO upload the archive to S3
-            # TODO function_code = dict(S3Bucket="...", S3Key="...", S3ObjectVersion="...")
-            click.echo("Error: archive is {} bytes, which is too large to upload directly (max: 50MB)".format(archive_size))
-            return False
-        else:
-            with open(archive_path, "rb") as f:
-                function_code = { "ZipFile": f.read() }
-
         lambda_client = self._aws_client("lambda", True)
-        function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
+        s3_client = self._aws_client("s3", True)
+
+        code = self._lambda_create_archive(
+            lambda_client = lambda_client,
+            output_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH"),
+            source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR"),
+            s3_bucket = self.env.get("DEPLOY_LAMBDA_S3_BUCKET"),
+            s3_client = s3_client,
+            tag = tag,
+        )
 
         click.echo("Checking for existing {} function...".format(function_name))
         try:
@@ -308,7 +307,7 @@ class Deployables2:
             click.echo("No function found")
         click.echo("")
 
-        function_config = {
+        config = {
             "Description": self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
             "Environment": function_environment,
             "FunctionName": function_name,
@@ -322,15 +321,16 @@ class Deployables2:
             "Timeout": int(self.env.get("DEPLOY_LAMBDA_FUNCTION_TIMEOUT")),
         }
 
-        for key, value in dict(function_config).items():
+        for key, value in dict(config).items():
             if value is None:
-                del function_config[key]
+                del config[key]
 
         if existing_function is None:
             new_function = self._lambda_create_function(
-                lambda_client,
-                function_config,
-                function_code,
+                code = code,
+                config = config,
+                lambda_client = lambda_client,
+                tag = tag,
             )
 
             publish_config = {
@@ -343,11 +343,12 @@ class Deployables2:
             click.echo("")
         else:
             updated_function = self._lambda_update_function(
-                lambda_client,
-                function_config | {
+                code = code,
+                config = config | {
                     "RevisionId": existing_function["RevisionId"]
                 },
-                function_code
+                lambda_client = lambda_client,
+                tag = tag,
             )
 
             publish_config = {
@@ -372,52 +373,63 @@ class Deployables2:
 
         return True
 
-    def _lambda_create_archive(self):
-        if not self._required_env([
-            "DEPLOY_LAMBDA_SOURCE_DIR",
-            "DEPLOY_LAMBDA_ZIP_FULLPATH",
-        ]):
-            return None
-
-        full_source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR")
-        full_archive_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH")
+    def _lambda_create_archive(self, lambda_client, output_path, source_directory, s3_bucket, s3_client, tag):
+        # TODO check if output_path refers to a pre-built .zip and use it as is, if so
 
         archive_format = "zip"
-        archive_name = pathlib.Path(full_archive_path).with_suffix('')
+        archive_name = pathlib.Path(output_path).with_suffix('')
 
-        click.echo("Creating {} archive of {}...".format(archive_format, full_source_directory))
+        click.echo("Creating {} archive of {}...".format(archive_format, source_directory))
 
         ignore_patterns = [".git"]
 
         with tempfile.TemporaryDirectory() as temp_directory:
             # create a temporary copy of the project source, ignoring unnecessary files/directories
             shutil.copytree(
-                full_source_directory,
+                source_directory,
                 temp_directory,
                 dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns(*ignore_patterns),
             )
 
             # create a .zip of the project source
-            archive = shutil.make_archive(
+            shutil.make_archive(
                 archive_name,
                 archive_format,
                 temp_directory,
             )
 
-        click.echo("Created {}".format(full_archive_path))
+        click.echo("Created {}".format(output_path))
         click.echo("")
 
-        return archive
+        account_settings = lambda_client.get_account_settings()
+        click.echo(json.dumps(account_settings, indent = 2))
 
-    def _lambda_create_function(self, client, config, code):
-        new_function = client.create_function(**(config | { "Code": code, "PackageType": "Zip" }))
+        max_archive_bytes = 0    # TODO use the actual limit from the account settings
+
+        archive_size = os.path.getsize(output_path)
+        if archive_size >= max_archive_bytes:
+            click.echo("Archive is too large to upload directly (Lambda has a {}MB limit)".format(max_archive_bytes // 1_000_000))
+            return self._lambda_upload_archive_to_s3(
+                archive_path = output_path,
+                s3_bucket = s3_bucket,
+                s3_client = s3_client,
+                tag = tag,
+            )
+
+        with open(output_path, "rb") as f:
+            function_code = { "ZipFile": f.read() }
+
+        return function_code
+
+    def _lambda_create_function(self, code, config, lambda_client):
+        new_function = lambda_client.create_function(**(config | { "Code": code, "PackageType": "Zip" }))
 
         function_arn = new_function['FunctionArn']
 
         [new_function, error] = self._poll_for_update(
             "Creating function...".format(function_arn),
-            lambda: client.get_function_configuration(FunctionName = function_arn),
+            lambda: lambda_client.get_function_configuration(FunctionName = function_arn),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
@@ -431,13 +443,13 @@ class Deployables2:
 
         return new_function
 
-    def _lambda_publish_version(self, client, config):
-        published_function = client.publish_version(**config)
+    def _lambda_publish_version(self, config, lambda_client):
+        published_function = lambda_client.publish_version(**config)
         function_arn_with_version = published_function["FunctionArn"]
 
         [published_function, error] = self._poll_for_update(
             "Publishing version...",
-            lambda: client.get_function_configuration(FunctionName = function_arn_with_version),
+            lambda: lambda_client.get_function_configuration(FunctionName = function_arn_with_version),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
@@ -451,11 +463,11 @@ class Deployables2:
 
         return published_function
 
-    def _lambda_update_function(self, client, config, code):
-        updated_function = client.update_function_configuration(**config)
+    def _lambda_update_function(self, code, config, lambda_client):
+        updated_function = lambda_client.update_function_configuration(**config)
         [updated_function, error] = self._poll_for_update(
             "Updating function configuration...",
-            lambda: client.get_function_configuration(FunctionName = config["FunctionName"]),
+            lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
@@ -476,11 +488,11 @@ class Deployables2:
             "RevisionId": updated_function["RevisionId"],
         }
 
-        updated_function = client.update_function_code(**updated_function_code)
+        updated_function = lambda_client.update_function_code(**updated_function_code)
 
         [updated_function, error] = self._poll_for_update(
             "Updating function code...",
-            lambda: client.get_function_configuration(FunctionName = config["FunctionName"]),
+            lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
@@ -496,6 +508,35 @@ class Deployables2:
         click.echo("")
 
         return updated_function
+
+    def _lambda_upload_archive_to_s3(self, archive_path, s3_bucket, s3_client, tag):
+        path = pathlib.Path(archive_path)
+        archive_name = path.stem
+        archive_extension = path.suffix
+
+        s3_key = "{}/archive/{}-{}{}".format(archive_name, archive_name, tag, archive_extension)
+
+        click.echo("Uploading {} to S3...".format(archive_path))
+
+        with open(archive_path, "rb") as f:
+            archive_content = f.read()
+
+        response = s3_client.put_object(
+            ACL = "bucket-owner-full-control",
+            Body = archive_content,
+            Bucket = s3_bucket,
+            Key = s3_key,
+        )
+
+        click.echo("Uploaded archive to s3://{}/{}".format(s3_bucket, s3_key))
+        click.echo("")
+
+        return {
+            "S3Bucket": s3_bucket,
+            "S3Key": s3_key,
+            "S3ObjectVersion": response["VersionId"],
+        }
+
 
     def _load_vars_from_env(self, defaults):
         self.env = defaults.copy()
