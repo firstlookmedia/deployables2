@@ -362,9 +362,6 @@ class Deployables2:
 
             click.echo("Updating configuration for {}...".format(function_name))
             updated_function = lambda_client.update_function_configuration(**updated_function_config)
-            if updated_function["State"] == "Failed":
-                click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
-                return False
 
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
@@ -372,11 +369,15 @@ class Deployables2:
             [updated_function, error] = self._poll_for_update(
                 "Checking for updated configuration for {}...".format(function_name),
                 lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["Status"] != "Pending",
+                lambda response: response["LastUpdateStatus"] != "Pending",
             )
 
             if error:
                 click.echo("Lambda took too long to update the function's configuration")
+                return False
+
+            if updated_function["LastUpdateStatus"] == "Failed":
+                click.echo("Failed to update the function's configuration: {}".format(updated_function["LastUpdateStatusReason"]))
                 return False
 
             click.echo("Updated configuration for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
@@ -392,9 +393,6 @@ class Deployables2:
                 "RevisionId": existing_revision,
             }
             updated_function = lambda_client.update_function_code(**updated_function_code)
-            if updated_function["State"] == "Failed":
-                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
-                return False
 
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
@@ -402,11 +400,15 @@ class Deployables2:
             [updated_function, error] = self._poll_for_update(
                 "Checking for updated configuration for {}...".format(function_name),
                 lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["Status"] != "Pending",
+                lambda response: response["LastUpdateStatus"] != "Pending",
             )
 
             if error:
                 click.echo("Lambda took too long to update the function's code")
+                return False
+
+            if updated_function["LastUpdateStatus"] == "Failed":
+                click.echo("Failed to update the function's code: {}".format(updated_function["LastUpdateStatusReason"]))
                 return False
 
             click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
@@ -551,20 +553,21 @@ class Deployables2:
 
         return True
 
-    def _poll_for_update(self, start_message, request, is_complete, max_attempts=1000, delay_between_requests=5):
-        click.echo(start_message, nl=False)
+    def _poll_for_update(self, start_message, request, is_finished, max_attempts=1000, delay_between_requests=5):
+        click.echo(start_message, nl=True) # TODO nl=False
 
         attempt = 1
         while attempt < max_attempts:
             response = request()
+            click.echo(json.dumps(response, indent=2)) # TODO remove
 
-            if is_complete(response):
+            if is_finished(response):
                 click.echo("")
                 return [response, None]
 
             attempt += 1
-            click.echo(".", nl=False)
+            # click.echo(".", nl=False) # TODO reenable
             time.sleep(delay_between_requests)
 
-        click.echo("")
+        # click.echo("") # TODO reenable
         [None, "too many attempts"]
