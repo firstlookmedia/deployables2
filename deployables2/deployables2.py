@@ -333,12 +333,6 @@ class Deployables2:
 
             click.echo("Creating new {} function...".format(function_name), nl = False)
             new_function = lambda_client.create_function(**new_function_config)
-
-            if new_function["State"] == "Failed":
-                click.echo("")
-                click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
-                return False
-
             function_arn = new_function['FunctionArn']
 
             if new_function["State"] == "Pending":
@@ -383,13 +377,8 @@ class Deployables2:
             FunctionName = function_name,
             RevisionId = revision_to_publish
         )
-
-        if published_function["State"] == "Failed":
-            click.echo("")
-            click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
-            return False
-
         versioned_function_arn = published_function['FunctionArn']
+
         if published_function["State"] == "Pending":
             attempt = 0
             while attempt < 1000:
@@ -404,11 +393,16 @@ class Deployables2:
                     time.sleep(5)
                 else:
                     break
-            click.echo("")
 
             if published_function["State"] == "Pending":
+                click.echo("")
                 click.echo("Lambda took too long to publish the new version")
                 return False
+        click.echo("")
+
+        if published_function["State"] == "Failed":
+            click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
+            return False
 
         click.echo("Published {} (state: {})".format(versioned_function_arn, published_function["State"]))
         return True
@@ -426,7 +420,7 @@ class Deployables2:
         archive_format = "zip"
         archive_name = pathlib.Path(full_archive_path).with_suffix('')
 
-        click.echo("Creating {} archive of {} ...".format(archive_format, full_source_directory))
+        click.echo("Creating {} archive of {}...".format(archive_format, full_source_directory))
 
         ignore_patterns = [".git"]
 
