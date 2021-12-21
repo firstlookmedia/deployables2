@@ -369,15 +369,15 @@ class Deployables2:
             [updated_function, error] = self._poll_for_update(
                 "Checking for updated configuration for {}...".format(function_name),
                 lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["LastUpdateStatus"] != "Pending",
+                lambda response: response["State"] != "Pending",
             )
 
             if error:
                 click.echo("Lambda took too long to update the function's configuration")
                 return False
 
-            if updated_function["LastUpdateStatus"] == "Failed":
-                click.echo("Failed to update the function's configuration: {}".format(updated_function["LastUpdateStatusReason"]))
+            if updated_function["State"] == "Failed":
+                click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
                 return False
 
             click.echo("Updated configuration for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
@@ -400,15 +400,15 @@ class Deployables2:
             [updated_function, error] = self._poll_for_update(
                 "Checking for updated configuration for {}...".format(function_name),
                 lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["LastUpdateStatus"] != "Pending",
+                lambda response: response["State"] != "Pending",
             )
 
             if error:
                 click.echo("Lambda took too long to update the function's code")
                 return False
 
-            if updated_function["LastUpdateStatus"] == "Failed":
-                click.echo("Failed to update the function's code: {}".format(updated_function["LastUpdateStatusReason"]))
+            if updated_function["State"] == "Failed":
+                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
                 return False
 
             click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
