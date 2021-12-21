@@ -440,6 +440,8 @@ class Deployables2:
             RevisionId = revision,
         )
 
+        click.echo(json.dumps(published_function, indent=2)) # TODO remove
+
         [published_function, error] = self._poll_for_update(
             "Waiting for version to publish...",
             lambda: client.get_function_configuration(FunctionName = function_name),
