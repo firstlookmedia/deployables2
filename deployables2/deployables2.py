@@ -357,7 +357,10 @@ class Deployables2:
             click.echo("Updated {} (revision: {})".format(updated_function["FunctionArn"], updated_function["RevisionId"]))
             click.echo("")
 
-        published_function = self._lambda_publish_version(lambda_client, publish_config)
+        published_function = self._lambda_publish_version(
+            config = publish_config,
+            lambda_client = lambda_client,
+        )
 
         click.echo("Published new version of {}:".format(function_name))
         click.echo("- arn: {}".format(published_function["FunctionArn"]))
@@ -421,9 +424,9 @@ class Deployables2:
         function_arn = new_function['FunctionArn']
 
         [new_function, error] = self._poll_for_update(
-            "Creating function...".format(function_arn),
-            lambda: lambda_client.get_function_configuration(FunctionName = function_arn),
-            lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            is_finished = lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            perform_request = lambda: lambda_client.get_function_configuration(FunctionName = function_arn),
+            start_message = "Creating function...".format(function_arn),
         )
 
         if error:
@@ -441,9 +444,9 @@ class Deployables2:
         function_arn_with_version = published_function["FunctionArn"]
 
         [published_function, error] = self._poll_for_update(
-            "Publishing version...",
-            lambda: lambda_client.get_function_configuration(FunctionName = function_arn_with_version),
-            lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            is_finished = lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            perform_request = lambda: lambda_client.get_function_configuration(FunctionName = function_arn_with_version),
+            start_message = "Publishing version...",
         )
 
         if error:
@@ -459,9 +462,9 @@ class Deployables2:
     def _lambda_update_function(self, code, config, lambda_client):
         updated_function = lambda_client.update_function_configuration(**config)
         [updated_function, error] = self._poll_for_update(
-            "Updating function configuration...",
-            lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
-            lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            is_finished = lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            perform_request = lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
+            start_message = "Updating function configuration...",
         )
 
         if error:
@@ -484,9 +487,9 @@ class Deployables2:
         updated_function = lambda_client.update_function_code(**updated_function_code)
 
         [updated_function, error] = self._poll_for_update(
-            "Updating function code...",
-            lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
-            lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            is_finished = lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
+            perform_request = lambda: lambda_client.get_function_configuration(FunctionName = config["FunctionName"]),
+            start_message = "Updating function code...",
         )
 
         if error:
@@ -575,12 +578,12 @@ class Deployables2:
 
         return True
 
-    def _poll_for_update(self, start_message, request, is_finished, max_attempts=1000, delay_between_requests=5):
+    def _poll_for_update(self, is_finished, perform_request, start_message, delay_between_requests=5, max_attempts=1000):
         click.echo(start_message, nl=False)
 
         attempt = 1
         while attempt < max_attempts:
-            response = request()
+            response = perform_request()
 
             if is_finished(response):
                 click.echo("")
