@@ -297,12 +297,16 @@ class Deployables2:
         lambda_client = self._aws_client("lambda", True)
         function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
 
+        click.echo("Checking for existing {} function...".format(function_name))
         try:
             existing_function = lambda_client.get_function_configuration(
                 FunctionName = function_name,
             )
+            click.echo("Found {}".format(existing_function["FunctionArn"]))
         except lambda_client.exceptions.ResourceNotFoundException:
             existing_function = None
+            click.echo("No function found")
+        click.echo("")
 
         function_config = {
             "Description": self.env.get("DEPLOY_LAMBDA_FUNCTION_DESCRIPTION"),
@@ -329,14 +333,14 @@ class Deployables2:
                 function_code,
             )
 
-            revision_to_publish = new_function["RevisionId"]
+            publish_config = {
+                "CodeSha256": new_function["CodeSha256"],
+                "FunctionName": function_name,
+                "RevisionId": new_function["RevisionId"],
+            }
 
-            click.echo("Created {}:".format(function_name))
-            click.echo("- arn: {}".format(new_function["FunctionArn"]))
-            click.echo("- hash: {}".format(new_function["CodeSha256"]))
-            click.echo("- revision: {}".format(revision_to_publish))
+            click.echo("Created {} (revision: {})".format(new_function["FunctionArn"], new_function["RevisionId"]))
             click.echo("")
-
         else:
             updated_function = self._lambda_update_function(
                 lambda_client,
@@ -346,19 +350,16 @@ class Deployables2:
                 function_code
             )
 
-            revision_to_publish = updated_function["RevisionId"]
+            publish_config = {
+                "CodeSha256": updated_function["CodeSha256"],
+                "FunctionName": function_name,
+                "RevisionId": updated_function["RevisionId"],
+            }
 
-            click.echo("Updated {}:".format(function_name))
-            click.echo("- arn: {}".format(updated_function["FunctionArn"]))
-            click.echo("- hash: {}".format(updated_function["CodeSha256"]))
-            click.echo("- revision: {} (was {})".format(revision_to_publish, existing_function["RevisionId"]))
+            click.echo("Updated {} (revision: {})".format(updated_function["FunctionArn"], updated_function["RevisionId"]))
             click.echo("")
 
-        published_function = self._lambda_publish_version(
-            lambda_client,
-            function_name,
-            revision_to_publish,
-        )
+        published_function = self._lambda_publish_version(lambda_client, publish_config)
 
         click.echo("Published new version of {}:".format(function_name))
         click.echo("- arn: {}".format(published_function["FunctionArn"]))
@@ -366,6 +367,8 @@ class Deployables2:
         click.echo("- revision: {}".format(published_function["RevisionId"]))
         click.echo("- version: {}".format(published_function["Version"]))
         click.echo("")
+
+        click.echo("DONE")
 
         return True
 
@@ -408,13 +411,12 @@ class Deployables2:
         return archive
 
     def _lambda_create_function(self, client, config, code):
-        click.echo("Creating new {} function...".format(config["FunctionName"]))
         new_function = client.create_function(**(config | { "Code": code, "PackageType": "Zip" }))
 
         function_arn = new_function['FunctionArn']
 
         [new_function, error] = self._poll_for_update(
-            "Waiting for {} to be fully created...".format(function_arn),
+            "Creating function...".format(function_arn),
             lambda: client.get_function_configuration(FunctionName = function_arn),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
@@ -423,52 +425,36 @@ class Deployables2:
             click.echo("Lambda took too long to create the function")
             return False
 
-        if new_function["LastUpdateStatus"] == "Failed":
-            click.echo("Failed to create the function: {}".format(new_function["LastUpdateStatusReason"]))
-            return False
-        if new_function["State"] == "Failed":
-            click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
+        if new_function["LastUpdateStatus"] == "Failed" or new_function["State"] == "Failed":
+            click.echo("Failed to create the function: {}".format(new_function["LastUpdateStatusReason"] or new_function["StateReason"]))
             return False
 
         return new_function
 
-    def _lambda_publish_version(self, client, function_name, revision):
-        click.echo("Publishing new version...")
-
-        published_function = client.publish_version(
-            FunctionName = function_name,
-            RevisionId = revision,
-        )
-        function_arn = published_function["FunctionArn"]
-
-        click.echo(json.dumps(published_function, indent=2)) # TODO remove
+    def _lambda_publish_version(self, client, config):
+        published_function = client.publish_version(**config)
+        function_arn_with_version = published_function["FunctionArn"]
 
         [published_function, error] = self._poll_for_update(
-            "Waiting for version to publish...",
-            lambda: client.get_function_configuration(FunctionName = function_arn),
+            "Publishing version...",
+            lambda: client.get_function_configuration(FunctionName = function_arn_with_version),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
         if error:
-            click.echo("Lambda took too long to publish the new function version")
+            click.echo("Lambda took too long to publish the new version")
             return False
 
-        if published_function["LastUpdateStatus"] == "Failed":
-            click.echo("Failed to publish the version: {}".format(published_function["LastUpdateStatusReason"]))
-            return False
-        if published_function["State"] == "Failed":
-            click.echo("Failed to publish the version: {}".format(published_function["StateReason"]))
+        if published_function["LastUpdateStatus"] == "Failed" or published_function["State"] == "Failed":
+            click.echo("Failed to publish the version: {}".format(published_function["LastUpdateStatusReason"] or published_function["StateReason"]))
             return False
 
         return published_function
 
     def _lambda_update_function(self, client, config, code):
-        click.echo("Updating function configuration...")
-
         updated_function = client.update_function_configuration(**config)
-
         [updated_function, error] = self._poll_for_update(
-            "Waiting for configuration to update...",
+            "Updating function configuration...",
             lambda: client.get_function_configuration(FunctionName = config["FunctionName"]),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
@@ -477,17 +463,12 @@ class Deployables2:
             click.echo("Lambda took too long to update the function's configuration")
             return False
 
-        if updated_function["LastUpdateStatus"] == "Failed":
-            click.echo("Failed to update the function: {}".format(updated_function["LastUpdateStatusReason"]))
-            return False
-        if updated_function["State"] == "Failed":
-            click.echo("Failed to update the function: {}".format(updated_function["StateReason"]))
+        if updated_function["LastUpdateStatus"] == "Failed" or updated_function["State"] == "Failed":
+            click.echo("Failed to update the function: {}".format(updated_function["LastUpdateStatusReason"] or updated_function["StateReason"]))
             return False
 
-        click.echo("Updated configuration (revision: {})".format(updated_function["RevisionId"]))
+        click.echo("Updated function configuration (revision: {})".format(updated_function["RevisionId"]))
         click.echo("")
-
-        click.echo("Updating code...")
 
         updated_function_code = code | {
             "FunctionName": config["FunctionName"],
@@ -498,7 +479,7 @@ class Deployables2:
         updated_function = client.update_function_code(**updated_function_code)
 
         [updated_function, error] = self._poll_for_update(
-            "Waiting for code to update...",
+            "Updating function code...",
             lambda: client.get_function_configuration(FunctionName = config["FunctionName"]),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
@@ -507,14 +488,11 @@ class Deployables2:
             click.echo("Lambda took too long to update the function's code")
             return False
 
-        if updated_function["LastUpdateStatus"] == "Failed":
-            click.echo("Failed to create the function: {}".format(updated_function["LastUpdateStatusReason"]))
-            return False
-        if updated_function["State"] == "Failed":
-            click.echo("Failed to create the function: {}".format(updated_function["StateReason"]))
+        if updated_function["LastUpdateStatus"] == "Failed" or updated_function["State"] == "Failed":
+            click.echo("Failed to create the function: {}".format(updated_function["LastUpdateStatusReason"] or updated_function["StateReason"]))
             return False
 
-        click.echo("Updated code (revision: {})".format(updated_function["RevisionId"]))
+        click.echo("Updated function code (revision: {})".format(updated_function["RevisionId"]))
         click.echo("")
 
         return updated_function
