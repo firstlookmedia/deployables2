@@ -347,7 +347,7 @@ class Deployables2:
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
-            click.echo("Created {} function").format(function_arn)
+            click.echo("Created {} function".format(function_arn))
             click.echo("- state: {}".format(new_function["State"]))
             click.echo("- code hash: {}".format(new_function["CodeSha256"]))
             click.echo("- revision: {}".format(new_function["RevisionId"]))
@@ -415,7 +415,7 @@ class Deployables2:
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
 
-            click.echo("Updated {} function").format(updated_function["FunctionArn"])
+            click.echo("Updated {} function".format(updated_function["FunctionArn"]))
             click.echo("- state: {}".format(updated_function["State"]))
             click.echo("- code hash: {}".format(updated_function["CodeSha256"]))
             click.echo("- revision: {}".format(updated_function["RevisionId"]))
