@@ -267,7 +267,6 @@ class Deployables2:
             "DEPLOY_LAMBDA_FUNCTION_RUNTIME",
             "DEPLOY_LAMBDA_FUNCTION_TIMEOUT",
             "DEPLOY_LAMBDA_SOURCE_DIR",
-            "DEPLOY_LAMBDA_S3_BUCKET",
             "DEPLOY_LAMBDA_ZIP_FULLPATH",
             "DEPLOY_LAMBDA_ZIP_VERSION",
         ]):
@@ -285,16 +284,16 @@ class Deployables2:
         )
 
         lambda_client = self._aws_client("lambda", True)
-        s3_client = self._aws_client("s3", True)
 
         code = self._lambda_create_archive(
             lambda_client = lambda_client,
             output_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH"),
             source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR"),
-            s3_bucket = self.env.get("DEPLOY_LAMBDA_S3_BUCKET"),
-            s3_client = s3_client,
             tag = tag,
         )
+        if code is None:
+            click.echo("Could not create the archive")
+            return False
 
         click.echo("Checking for existing {} function...".format(function_name))
         try:
@@ -373,7 +372,7 @@ class Deployables2:
 
         return True
 
-    def _lambda_create_archive(self, lambda_client, output_path, source_directory, s3_bucket, s3_client, tag):
+    def _lambda_create_archive(self, lambda_client, output_path, source_directory):
         # TODO check if output_path refers to a pre-built .zip and use it as is, if so
 
         archive_format = "zip"
@@ -410,12 +409,10 @@ class Deployables2:
         archive_size = os.path.getsize(output_path)
         if archive_size >= max_archive_bytes:
             click.echo("Archive is too large to upload directly (Lambda has a {}MB limit)".format(max_archive_bytes // 1_000_000))
-            return self._lambda_upload_archive_to_s3(
-                archive_path = output_path,
-                s3_bucket = s3_bucket,
-                s3_client = s3_client,
-                tag = tag,
-            )
+
+            # TODO upload large archives to S3 and then return {"S3Bucket": ..., "S3Key": ..., "S3ObjectVersion: ..."}
+
+            return None
 
         with open(output_path, "rb") as f:
             function_code = { "ZipFile": f.read() }
@@ -508,34 +505,6 @@ class Deployables2:
         click.echo("")
 
         return updated_function
-
-    def _lambda_upload_archive_to_s3(self, archive_path, s3_bucket, s3_client, tag):
-        path = pathlib.Path(archive_path)
-        archive_name = path.stem
-        archive_extension = path.suffix
-
-        s3_key = "{}/archive/{}-{}{}".format(archive_name, archive_name, tag, archive_extension)
-
-        click.echo("Uploading {} to S3...".format(archive_path))
-
-        with open(archive_path, "rb") as f:
-            archive_content = f.read()
-
-        response = s3_client.put_object(
-            ACL = "bucket-owner-full-control",
-            Body = archive_content,
-            Bucket = s3_bucket,
-            Key = s3_key,
-        )
-
-        click.echo("Uploaded archive to s3://{}/{}".format(s3_bucket, s3_key))
-        click.echo("")
-
-        return {
-            "S3Bucket": s3_bucket,
-            "S3Key": s3_key,
-            "S3ObjectVersion": response["VersionId"],
-        }
 
 
     def _load_vars_from_env(self, defaults):
