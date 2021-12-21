@@ -439,12 +439,13 @@ class Deployables2:
             FunctionName = function_name,
             RevisionId = revision,
         )
+        function_arn = published_function["FunctionArn"]
 
         click.echo(json.dumps(published_function, indent=2)) # TODO remove
 
         [published_function, error] = self._poll_for_update(
             "Waiting for version to publish...",
-            lambda: client.get_function_configuration(FunctionName = function_name),
+            lambda: client.get_function_configuration(FunctionName = function_arn),
             lambda response: response["State"] != "Pending" and response["LastUpdateStatus"] != "InProgress",
         )
 
