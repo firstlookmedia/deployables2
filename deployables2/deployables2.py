@@ -2,7 +2,6 @@ import base64
 import boto3
 import click
 import datetime
-import hashlib
 import jinja2
 import json
 import os
@@ -330,7 +329,7 @@ class Deployables2:
                 "Publish": False,
             }
 
-            click.echo("Creating new {} function...".format(function_name), nl = False)
+            click.echo("Creating new {} function...".format(function_name))
             new_function = lambda_client.create_function(**new_function_config)
             function_arn = new_function['FunctionArn']
 
@@ -428,9 +427,9 @@ class Deployables2:
         versioned_function_arn = published_function['FunctionArn']
 
         [published_function, error] = self._poll_for_update(
-            "Checking for updated configuration for {}...".format(function_name),
+            "Waiting for the new version of {} to publish...".format(function_name),
             lambda: lambda_client.get_function_configuration(FunctionName = versioned_function_arn),
-            lambda response: response["Status"] != "Pending",
+            lambda response: response["State"] != "Pending",
         )
 
         if error:
@@ -555,20 +554,19 @@ class Deployables2:
         return True
 
     def _poll_for_update(self, start_message, request, is_finished, max_attempts=1000, delay_between_requests=5):
-        click.echo(start_message, nl=True) # TODO nl=False
+        click.echo(start_message, nl=False)
 
         attempt = 1
         while attempt < max_attempts:
             response = request()
-            click.echo(json.dumps(response, indent=2)) # TODO remove
 
             if is_finished(response):
                 click.echo("")
                 return [response, None]
 
             attempt += 1
-            # click.echo(".", nl=False) # TODO reenable
+            click.echo(".", nl=False)
             time.sleep(delay_between_requests)
 
-        # click.echo("") # TODO reenable
+        click.echo("")
         [None, "too many attempts"]
