@@ -326,7 +326,7 @@ class Deployables2:
             new_function_config = function_config | {
                 "Code": function_code,
                 "PackageType": "Zip",
-                "Publish": False,
+                "Publish": True,
             }
 
             click.echo("Creating new {} function...".format(function_name))
@@ -347,11 +347,11 @@ class Deployables2:
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
-            code_sha256_to_publish = new_function["CodeSha256"]
-            revision_to_publish = new_function["RevisionId"]
-
-            click.echo("Created {} function (state: {}, revision: {})".format(function_arn, new_function["State"], revision_to_publish))
-            click.echo("")
+            click.echo("Created {} function").format(function_arn)
+            click.echo("- state: {}".format(new_function["State"]))
+            click.echo("- code hash: {}".format(new_function["CodeSha256"]))
+            click.echo("- revision: {}".format(new_function["RevisionId"]))
+            click.echo("- version: {}".format(new_function["Version"]))
         else:
             updated_function_config = function_config | {
                 "RevisionId": existing_function["RevisionId"]
@@ -387,7 +387,7 @@ class Deployables2:
 
             updated_function_code = function_code | {
                 "FunctionName": function_name,
-                "Publish": False,
+                "Publish": True,
                 "RevisionId": updated_function["RevisionId"],
             }
             updated_function = lambda_client.update_function_code(**updated_function_code)
@@ -415,33 +415,11 @@ class Deployables2:
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
 
-            code_sha256_to_publish = updated_function["CodeSha256"]
-            revision_to_publish = updated_function["RevisionId"]
-
-        click.echo("Publishing new version of {} (revision: {})...".format(function_name, revision_to_publish))
-        published_function = lambda_client.publish_version(
-            CodeSha256 = code_sha256_to_publish,
-            FunctionName = function_name,
-            RevisionId = revision_to_publish
-        )
-        versioned_function_arn = published_function['FunctionArn']
-
-        [published_function, error] = self._poll_for_update(
-            "Waiting for the new version of {} to publish...".format(function_name),
-            lambda: lambda_client.get_function_configuration(FunctionName = versioned_function_arn),
-            lambda response: response["State"] != "Pending",
-        )
-
-        if error:
-            click.echo("Lambda took too long to publish the new version")
-            return False
-
-        if published_function["State"] == "Failed":
-            click.echo("The new version failed to publish: {}".format(published_function["StateReason"]))
-            return False
-
-        click.echo("Published {} (state: {}, revision: {})".format(versioned_function_arn, published_function["State"], published_function["RevisionId"]))
-        return True
+            click.echo("Updated {} function").format(updated_function["FunctionArn"])
+            click.echo("- state: {}".format(updated_function["State"]))
+            click.echo("- code hash: {}".format(updated_function["CodeSha256"]))
+            click.echo("- revision: {}".format(updated_function["RevisionId"]))
+            click.echo("- version: {}".format(updated_function["Version"]))
 
     def _create_lambda_archive(self):
         if not self._required_env([
