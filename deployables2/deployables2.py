@@ -352,74 +352,78 @@ class Deployables2:
             click.echo("- code hash: {}".format(new_function["CodeSha256"]))
             click.echo("- revision: {}".format(new_function["RevisionId"]))
             click.echo("- version: {}".format(new_function["Version"]))
-        else:
-            updated_function_config = function_config | {
-                "RevisionId": existing_function["RevisionId"]
-            }
 
-            click.echo("Updating configuration for {}...".format(function_name))
-            updated_function = lambda_client.update_function_configuration(**updated_function_config)
+            return True
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+        updated_function_config = function_config | {
+            "RevisionId": existing_function["RevisionId"]
+        }
 
-            [updated_function, error] = self._poll_for_update(
-                "Checking for updated configuration for {}...".format(function_name),
-                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["State"] != "Pending",
-            )
+        click.echo("Updating configuration for {}...".format(function_name))
+        updated_function = lambda_client.update_function_configuration(**updated_function_config)
 
-            if error:
-                click.echo("Lambda took too long to update the function's configuration")
-                return False
+        # TODO remove
+        click.echo(json.dumps(updated_function, indent = 2))
 
-            if updated_function["State"] == "Failed":
-                click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
-                return False
+        [updated_function, error] = self._poll_for_update(
+            "Checking for updated configuration for {}...".format(function_name),
+            lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+            lambda response: response["State"] != "Pending",
+        )
 
-            click.echo("Updated configuration for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
-            click.echo("")
+        if error:
+            click.echo("Lambda took too long to update the function's configuration")
+            return False
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+        if updated_function["State"] == "Failed":
+            click.echo("Failed to update the function's configuration: {}".format(updated_function["StateReason"]))
+            return False
 
-            click.echo("Updating code for {}...".format(function_name))
+        click.echo("Updated configuration for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
+        click.echo("")
 
-            updated_function_code = function_code | {
-                "FunctionName": function_name,
-                "Publish": True,
-                "RevisionId": updated_function["RevisionId"],
-            }
-            updated_function = lambda_client.update_function_code(**updated_function_code)
+        # TODO remove
+        click.echo(json.dumps(updated_function, indent = 2))
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+        click.echo("Updating code for {}...".format(function_name))
 
-            [updated_function, error] = self._poll_for_update(
-                "Checking for updated configuration for {}...".format(function_name),
-                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["State"] != "Pending",
-            )
+        updated_function_code = function_code | {
+            "FunctionName": function_name,
+            "Publish": True,
+            "RevisionId": updated_function["RevisionId"],
+        }
+        updated_function = lambda_client.update_function_code(**updated_function_code)
 
-            if error:
-                click.echo("Lambda took too long to update the function's code")
-                return False
+        # TODO remove
+        click.echo(json.dumps(updated_function, indent = 2))
 
-            if updated_function["State"] == "Failed":
-                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
-                return False
+        [updated_function, error] = self._poll_for_update(
+            "Checking for updated configuration for {}...".format(function_name),
+            lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+            lambda response: response["State"] != "Pending",
+        )
 
-            click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
-            click.echo("")
+        if error:
+            click.echo("Lambda took too long to update the function's code")
+            return False
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+        if updated_function["State"] == "Failed":
+            click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
+            return False
 
-            click.echo("Updated {} function".format(updated_function["FunctionArn"]))
-            click.echo("- state: {}".format(updated_function["State"]))
-            click.echo("- code hash: {}".format(updated_function["CodeSha256"]))
-            click.echo("- revision: {}".format(updated_function["RevisionId"]))
-            click.echo("- version: {}".format(updated_function["Version"]))
+        click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
+        click.echo("")
+
+        # TODO remove
+        click.echo(json.dumps(updated_function, indent = 2))
+
+        click.echo("Updated {} function".format(updated_function["FunctionArn"]))
+        click.echo("- state: {}".format(updated_function["State"]))
+        click.echo("- code hash: {}".format(updated_function["CodeSha256"]))
+        click.echo("- revision: {}".format(updated_function["RevisionId"]))
+        click.echo("- version: {}".format(updated_function["Version"]))
+
+        return True
 
     def _create_lambda_archive(self):
         if not self._required_env([
