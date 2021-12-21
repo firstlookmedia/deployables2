@@ -293,11 +293,7 @@ class Deployables2:
             return False
         else:
             with open(archive_path, "rb") as f:
-                compressed_code = f.read()
-                function_code = { "ZipFile": compressed_code }
-                function_code_sha256 = base64.b64encode(
-                    hashlib.sha256(compressed_code).digest()
-                )
+                function_code = { "ZipFile": f.read() }
 
         lambda_client = self._aws_client("lambda", True)
         function_name = self.env.get("DEPLOY_LAMBDA_FUNCTION_NAME")
@@ -352,15 +348,14 @@ class Deployables2:
                 click.echo("Failed to create the function: {}".format(new_function["StateReason"]))
                 return False
 
-            revision_to_publish = new_function['RevisionId']
+            code_sha256_to_publish = new_function["CodeSha256"]
+            revision_to_publish = new_function["RevisionId"]
 
             click.echo("Created {} function (state: {}, revision: {})".format(function_arn, new_function["State"], revision_to_publish))
             click.echo("")
         else:
-            existing_revision = existing_function['RevisionId']
-
             updated_function_config = function_config | {
-                "RevisionId": existing_revision
+                "RevisionId": existing_function["RevisionId"]
             }
 
             click.echo("Updating configuration for {}...".format(function_name))
@@ -389,47 +384,44 @@ class Deployables2:
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
 
-            click.echo("Existing code hash: {}".format(updated_function["CodeSha256"]))
-            click.echo("  Latest code hash: {}".format(function_code_sha256))
-            if updated_function["CodeSha256"] == function_code_sha256:
-                click.echo("No code update necessary")
-            else:
-                click.echo("Updating code for {}...".format(function_name))
+            click.echo("Updating code for {}...".format(function_name))
 
-                updated_function_code = function_code | {
-                    "FunctionName": function_name,
-                    "Publish": False,
-                    "RevisionId": existing_revision,
-                }
-                updated_function = lambda_client.update_function_code(**updated_function_code)
+            updated_function_code = function_code | {
+                "FunctionName": function_name,
+                "Publish": False,
+                "RevisionId": updated_function["RevisionId"],
+            }
+            updated_function = lambda_client.update_function_code(**updated_function_code)
 
-                # TODO remove
-                click.echo(json.dumps(updated_function, indent = 2))
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
 
-                [updated_function, error] = self._poll_for_update(
-                    "Checking for updated configuration for {}...".format(function_name),
-                    lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                    lambda response: response["State"] != "Pending",
-                )
+            [updated_function, error] = self._poll_for_update(
+                "Checking for updated configuration for {}...".format(function_name),
+                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+                lambda response: response["State"] != "Pending",
+            )
 
-                if error:
-                    click.echo("Lambda took too long to update the function's code")
-                    return False
+            if error:
+                click.echo("Lambda took too long to update the function's code")
+                return False
 
-                if updated_function["State"] == "Failed":
-                    click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
-                    return False
+            if updated_function["State"] == "Failed":
+                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
+                return False
 
-                click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
-                click.echo("")
+            click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
+            click.echo("")
 
-                # TODO remove
-                click.echo(json.dumps(updated_function, indent = 2))
+            # TODO remove
+            click.echo(json.dumps(updated_function, indent = 2))
 
+            code_sha256_to_publish = updated_function["CodeSha256"]
             revision_to_publish = updated_function["RevisionId"]
 
         click.echo("Publishing new version of {} (revision: {})...".format(function_name, revision_to_publish))
         published_function = lambda_client.publish_version(
+            CodeSha256 = code_sha256_to_publish,
             FunctionName = function_name,
             RevisionId = revision_to_publish
         )
