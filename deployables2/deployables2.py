@@ -2,6 +2,7 @@ import base64
 import boto3
 import click
 import datetime
+import hashlib
 import jinja2
 import json
 import os
@@ -292,8 +293,10 @@ class Deployables2:
             return False
         else:
             with open(archive_path, "rb") as f:
-                function_code = dict(
-                    ZipFile = f.read(),
+                compressed_code = f.read()
+                function_code = { "ZipFile": compressed_code }
+                function_code_sha256 = base64.b64encode(
+                    hashlib.sha256(compressed_code).digest()
                 )
 
         lambda_client = self._aws_client("lambda", True)
@@ -386,36 +389,41 @@ class Deployables2:
             # TODO remove
             click.echo(json.dumps(updated_function, indent = 2))
 
-            click.echo("Updating code for {}...".format(function_name))
-            updated_function_code = function_code | {
-                "FunctionName": function_name,
-                "Publish": False,
-                "RevisionId": existing_revision,
-            }
-            updated_function = lambda_client.update_function_code(**updated_function_code)
+            if updated_function["CodeSha256"] == function_code_sha256:
+                click.echo("No code update necessary")
+                click.echo("- live code hash: {}".format(updated_function["CodeSha256"]))
+                click.echo("- new code hash:  {}".format(function_code_sha256))
+            else:
+                click.echo("Updating code for {}...".format(function_name))
+                updated_function_code = function_code | {
+                    "FunctionName": function_name,
+                    "Publish": False,
+                    "RevisionId": existing_revision,
+                }
+                updated_function = lambda_client.update_function_code(**updated_function_code)
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+                # TODO remove
+                click.echo(json.dumps(updated_function, indent = 2))
 
-            [updated_function, error] = self._poll_for_update(
-                "Checking for updated configuration for {}...".format(function_name),
-                lambda: lambda_client.get_function_configuration(FunctionName = function_name),
-                lambda response: response["State"] != "Pending",
-            )
+                [updated_function, error] = self._poll_for_update(
+                    "Checking for updated configuration for {}...".format(function_name),
+                    lambda: lambda_client.get_function_configuration(FunctionName = function_name),
+                    lambda response: response["State"] != "Pending",
+                )
 
-            if error:
-                click.echo("Lambda took too long to update the function's code")
-                return False
+                if error:
+                    click.echo("Lambda took too long to update the function's code")
+                    return False
 
-            if updated_function["State"] == "Failed":
-                click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
-                return False
+                if updated_function["State"] == "Failed":
+                    click.echo("Failed to update the function's code: {}".format(updated_function["StateReason"]))
+                    return False
 
-            click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
-            click.echo("")
+                click.echo("Updated code for {} (state: {}, revision: {})".format(function_name, updated_function["State"], updated_function["RevisionId"]))
+                click.echo("")
 
-            # TODO remove
-            click.echo(json.dumps(updated_function, indent = 2))
+                # TODO remove
+                click.echo(json.dumps(updated_function, indent = 2))
 
             revision_to_publish = updated_function["RevisionId"]
 
