@@ -289,7 +289,6 @@ class Deployables2:
             lambda_client = lambda_client,
             output_path = self.env.get("DEPLOY_LAMBDA_ZIP_FULLPATH"),
             source_directory = self.env.get("DEPLOY_LAMBDA_SOURCE_DIR"),
-            tag = tag,
         )
         if code is None:
             click.echo("Could not create the archive")
@@ -329,7 +328,6 @@ class Deployables2:
                 code = code,
                 config = config,
                 lambda_client = lambda_client,
-                tag = tag,
             )
 
             publish_config = {
@@ -347,11 +345,11 @@ class Deployables2:
                     "RevisionId": existing_function["RevisionId"]
                 },
                 lambda_client = lambda_client,
-                tag = tag,
             )
 
             publish_config = {
                 "CodeSha256": updated_function["CodeSha256"],
+                "Description": tag,
                 "FunctionName": function_name,
                 "RevisionId": updated_function["RevisionId"],
             }
