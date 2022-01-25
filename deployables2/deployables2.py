@@ -182,7 +182,7 @@ class Deployables2:
         )
 
         rendered_template = template.render(template_vars)
-        print("Task definition:\n{}\n").format(rendered_template)
+        print("Task definition:\n{}\n".format(rendered_template))
         task_def = json.loads(rendered_template)
 
         # Register the new task def
