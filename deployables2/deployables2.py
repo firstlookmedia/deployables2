@@ -253,7 +253,12 @@ class Deployables2:
             finished = False
             for deployment in res["services"][0]["deployments"]:
                 click.echo(
-                    f"{deployment['runningCount']}/{deployment['desiredCount']}: {deployment['rolloutState']}, {deployment['rolloutStateReason']}"
+                    "{}/{}: {}, {}".format(
+                        deployment["runningCount"],
+                        deployment["desiredCount"],
+                        deployment["rolloutState"],
+                        deployment["rolloutStateReason"],
+                    )
                 )
                 if (
                     deployment["taskDefinition"] == revision_target
