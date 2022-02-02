@@ -25,6 +25,8 @@ class Deployables2:
             }
         )
 
+        self._display_all_vars()
+
         self.current_date = datetime.datetime.now().strftime("%Y%m%d")
 
     def docker_build(self):
@@ -81,6 +83,7 @@ class Deployables2:
                 "DEPLOY_AWS_ACCOUNT",
                 "DEPLOY_ECR_ACCOUNT",
                 "DEPLOY_ECR_HOST",
+                "DEPLOY_ECR_REPO",
             ]
         ):
             return
@@ -655,6 +658,12 @@ class Deployables2:
     def _display_vars(self, vars):
         for var in vars:
             click.echo("- {} = {}".format(var, self.env.get(var)))
+
+    def _display_all_vars(self):
+        click.echo("== all environment variables ==")
+        for var in self.env:
+            click.echo("{}={}".format(var, self.env.get(var)))
+        click.echo("===============================")
 
     def _exec(self, args, redact=False):
         if redact:
