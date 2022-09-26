@@ -405,6 +405,73 @@ class Deployables2:
 
         return True
 
+    def lambda_deploy_event(self):
+        if not self._required_env(
+            [
+                "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY",
+                "DEPLOY_AWS_ACCOUNT",
+                "DEPLOY_LAMBDA_EVENT_BASENAME",
+                "DEPLOY_LAMBDA_FUNCTION_ARN",
+                "DEPLOY_LAMBDA_EVENT_RULE",
+                "DEPLOY_LAMBDA_TARGET_INPUT_JSON",
+            ]
+        ):
+            return False
+
+        events_client = self._aws_client("events")
+        lambda_client = self._aws_client("lambda")
+
+        event_rule_name = self.env.get("DEPLOY_LAMBDA_EVENT_BASENAME") + "_rule"
+        permission_statement_id = (
+            self.env.get("DEPLOY_LAMBDA_EVENT_BASENAME") + "_permission"
+        )
+
+        # Create or update the cloudwatch event rule
+        response = events_client.put_rule(
+            Name=event_rule_name,
+            ScheduleExpression=self.env.get("DEPLOY_LAMBDA_EVENT_RULE"),
+        )
+        event_rule_arn = response["RuleArn"]
+
+        # Remove old lambda permission, if it's there
+        try:
+            lambda_client.remove_permission(
+                FunctionName=self.env.get("DEPLOY_LAMBDA_FUNCTION_ARN"),
+                StatementId=permission_statement_id,
+            )
+        except:
+            pass
+
+        # Give permissions (statement id needs to be consistent string for this rule)
+        response = lambda_client.add_permission(
+            FunctionName=self.env.get("DEPLOY_LAMBDA_FUNCTION_ARN"),
+            StatementId=permission_statement_id,
+            Action="lambda:InvokeFunction",
+            Principal="events.amazonaws.com",
+            SourceArn=event_rule_arn,
+        )
+
+        # Add the lambda target to the rule
+        response = events_client.put_targets(
+            Rule=event_rule_name,
+            Targets=[
+                {
+                    "Id": self.env.get("DEPLOY_LAMBDA_EVENT_BASENAME") + "_target",
+                    "Arn": self.env.get("DEPLOY_LAMBDA_FUNCTION_ARN"),
+                    "Input": self.env.get("DEPLOY_LAMBDA_TARGET_INPUT_JSON"),
+                }
+            ],
+        )
+        failed_entry_count = response["FailedEntryCount"]
+        if failed_entry_count != 0:
+            click.echo(
+                f"Failed associating event rule and lambda function, failed_entry_count={failed_entry_count}"
+            )
+            return False
+        else:
+            return True
+
     def _lambda_create_archive(self, lambda_client, output_path, source_directory):
         # TODO check if output_path refers to a pre-built .zip and use it as is, if so
 

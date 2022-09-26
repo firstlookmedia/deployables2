@@ -34,7 +34,7 @@ sudo apt-get update --allow-releaseinfo-change
 sudo apt-get install -y python3 python3-pip
 git clone https://github.com/firstlookmedia/deployables2.git /tmp/deployables2
 cd /tmp/deployables2
-git checkout v0.1.11
+git checkout v0.1.12
 pip3 install -r requirements.txt
 python3 setup.py install --user
 ```

@@ -42,5 +42,13 @@ def lambda_deploy():
         sys.exit(1)
 
 
+@main.command()
+def lambda_deploy_event():
+    """Deploy a new Lambda event"""
+    d = Deployables2()
+    if not d.lambda_deploy_event():
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()
