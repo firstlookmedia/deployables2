@@ -419,8 +419,8 @@ class Deployables2:
         ):
             return False
 
-        events_client = self._aws_client("events")
-        lambda_client = self._aws_client("lambda")
+        events_client = self._aws_client("events", True)
+        lambda_client = self._aws_client("lambda", True)
 
         event_rule_name = self.env.get("DEPLOY_LAMBDA_EVENT_BASENAME") + "_rule"
         permission_statement_id = (
